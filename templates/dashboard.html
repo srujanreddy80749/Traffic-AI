@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+{% block title %}Traffic Dashboard — AI Traffic System{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+{% endblock %}
+
+{% block content %}
+<div class="page-wrapper">
+<div class="container">
+
+  <div class="section-header">
+    <span class="section-label">Live Dashboard</span>
+    <h2>📊 Traffic Network Status</h2>
+    <p class="text-muted">
+      Road network overview with simulated congestion data.
+      <span class="badge badge-info">⚠️ All data is synthetic / simulated</span>
+    </p>
+  </div>
+
+  <!-- Controls -->
+  <div class="card mb-2">
+    <div class="flex gap-2" style="flex-wrap:wrap; align-items:flex-end;">
+      <div class="form-group" style="flex:1; min-width:150px; margin:0;">
+        <label class="form-label">Weather Condition</label>
+        <select id="weatherSel" class="form-control">
+          <option value="0">☀️ Clear</option>
+          <option value="1">🌧️ Rain</option>
+          <option value="2">🌫️ Fog</option>
+          <option value="3">❄️ Snow</option>
+        </select>
+      </div>
+      <div class="form-group" style="flex:1; min-width:180px; margin:0;">
+        <label class="form-label">Accident / Closure (Road)</label>
+        <select id="accidentSel" class="form-control">
+          <option value="">None</option>
+          <option value="A-B">A→B (City Centre→North Junction)</option>
+          <option value="A-C">A→C (City Centre→East Gateway)</option>
+          <option value="B-F">B→F (North Junction→Airport)</option>
+          <option value="D-H">D→H (South Ring→Industrial)</option>
+        </select>
+      </div>
+      <button class="btn btn-primary" onclick="loadNetworkStatus()">🔄 Refresh Map</button>
+    </div>
+  </div>
+
+  <!-- Stats row -->
+  <div class="grid-4 stagger mb-2" id="statsRow">
+    <div class="stat-card animate-in">
+      <div class="stat-icon green">🟢</div>
+      <div>
+        <div class="stat-label">Low Congestion Roads</div>
+        <div class="stat-value" id="statLow">–</div>
+      </div>
+    </div>
+    <div class="stat-card animate-in">
+      <div class="stat-icon orange">🟡</div>
+      <div>
+        <div class="stat-label">Medium Congestion Roads</div>
+        <div class="stat-value" id="statMed">–</div>
+      </div>
+    </div>
+    <div class="stat-card animate-in">
+      <div class="stat-icon red">🔴</div>
+      <div>
+        <div class="stat-label">High Congestion Roads</div>
+        <div class="stat-value" id="statHigh">–</div>
+      </div>
+    </div>
+    <div class="stat-card animate-in">
+      <div class="stat-icon blue">⏱️</div>
+      <div>
+        <div class="stat-label">Avg. Travel Time (min)</div>
+        <div class="stat-value" id="statAvgTime">–</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Map + Edge Table -->
+  <div class="grid-2" style="gap:1.25rem; align-items:start;">
+    <div class="card" style="padding:0.75rem; position:relative;">
+      <div class="loading-overlay" id="mapLoader">
+        <div class="spinner"></div>
+        <span>Loading map…</span>
+      </div>
+      <div id="map" style="height:480px;"></div>
+      <!-- Legend -->
+      <div style="display:flex; gap:1rem; padding:0.75rem 0 0; flex-wrap:wrap;">
+        <span style="font-size:0.78rem; color:var(--text-muted);">Congestion:</span>
+        <span style="font-size:0.78rem;"><span style="color:#10b981;">●</span> Low (&lt;40%)</span>
+        <span style="font-size:0.78rem;"><span style="color:#f59e0b;">●</span> Medium (40–75%)</span>
+        <span style="font-size:0.78rem;"><span style="color:#ef4444;">●</span> High (&gt;75%)</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title"><span class="icon">🛣️</span> Road Segments</div>
+        <span class="badge badge-info">Simulated</span>
+      </div>
+      <div class="table-wrapper" style="max-height:480px; overflow-y:auto;">
+        <table id="edgeTable">
+          <thead>
+            <tr>
+              <th>Road</th>
+              <th>Vehicles</th>
+              <th>Capacity</th>
+              <th>Time (min)</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="edgeTableBody">
+            <tr><td colspan="5" style="text-align:center; color:var(--text-muted);">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Congestion Chart -->
+  <div class="card mt-2">
+    <div class="card-header">
+      <div class="card-title"><span class="icon">📊</span> Congestion Ratio by Road Segment</div>
+    </div>
+    <canvas id="congestionChart" height="100"></canvas>
+  </div>
+
+</div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+{% endblock %}

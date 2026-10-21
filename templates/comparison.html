@@ -1,0 +1,149 @@
+{% extends "base.html" %}
+{% block title %}Performance Comparison — AI Traffic System{% endblock %}
+
+{% block content %}
+<div class="page-wrapper">
+<div class="container">
+
+  <div class="section-header">
+    <span class="section-label">Evaluation Results</span>
+    <h2>📈 Performance Comparison</h2>
+    <p class="text-muted">
+      Baseline vs Proposed strategy across multiple traffic scenarios.
+      Results come from the Python simulation — not invented or assumed.
+    </p>
+  </div>
+
+  <div class="alert alert-warning mb-2">
+    ⚠️ <strong>Honest Evaluation:</strong> The proposed method does not always outperform the baseline.
+    Results depend on traffic demand, weather conditions, and network state.
+    This page shows actual measured simulation output.
+  </div>
+
+  <div class="flex gap-2 mb-2" style="flex-wrap:wrap; align-items:center;">
+    <button class="btn btn-primary" onclick="loadComparison()" id="loadBtn">
+      📊 Run All Scenarios &amp; Compare
+    </button>
+    <div id="loadStatus" style="color:var(--text-muted); font-size:0.85rem; display:none;">
+      <div class="spinner" style="display:inline-block; vertical-align:middle;"></div>
+      Running 5 scenarios… (may take ~30 seconds)
+    </div>
+  </div>
+
+  <!-- Summary Stats -->
+  <div class="grid-4 mb-2 stagger" id="summaryStats" style="display:none;">
+    <div class="stat-card animate-in">
+      <div class="stat-icon blue">📊</div>
+      <div>
+        <div class="stat-label">Scenarios Run</div>
+        <div class="stat-value" id="cmpScenarios">5</div>
+      </div>
+    </div>
+    <div class="stat-card animate-in">
+      <div class="stat-icon green">✅</div>
+      <div>
+        <div class="stat-label">Proposed Wins</div>
+        <div class="stat-value" id="cmpWins">–</div>
+        <div class="stat-sub">avg travel time lower</div>
+      </div>
+    </div>
+    <div class="stat-card animate-in">
+      <div class="stat-icon orange">⚡</div>
+      <div>
+        <div class="stat-label">Baseline Wins</div>
+        <div class="stat-value" id="cmpLosses">–</div>
+      </div>
+    </div>
+    <div class="stat-card animate-in">
+      <div class="stat-icon cyan">🤝</div>
+      <div>
+        <div class="stat-label">Ties / Negligible</div>
+        <div class="stat-value" id="cmpTies">–</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Charts -->
+  <div class="grid-2 mb-2" id="chartsArea" style="display:none;">
+    <div class="card">
+      <div class="card-title mb-2"><span class="icon">⏱️</span> Avg Travel Time (minutes)</div>
+      <canvas id="travelTimeChart" height="200"></canvas>
+    </div>
+    <div class="card">
+      <div class="card-title mb-2"><span class="icon">🌐</span> Total Network Delay (minutes)</div>
+      <canvas id="networkDelayChart" height="200"></canvas>
+    </div>
+    <div class="card">
+      <div class="card-title mb-2"><span class="icon">⏳</span> Avg Waiting Time (minutes)</div>
+      <canvas id="waitTimeChart" height="200"></canvas>
+    </div>
+    <div class="card">
+      <div class="card-title mb-2"><span class="icon">🔴</span> Max Congestion Ratio</div>
+      <canvas id="maxCongChart" height="200"></canvas>
+    </div>
+  </div>
+
+  <!-- Detail Table -->
+  <div class="card" id="detailTableCard" style="display:none;">
+    <div class="card-title mb-2"><span class="icon">📋</span> Scenario Detail Table</div>
+    <div class="alert alert-info mb-2">
+      Values in <span style="color:var(--accent-green);">green</span> indicate the better-performing
+      strategy for that metric and scenario. Differences &lt;0.5 min are considered ties.
+    </div>
+    <div class="table-wrapper">
+      <table id="detailTable">
+        <thead>
+          <tr>
+            <th>Scenario</th>
+            <th>Weather</th>
+            <th>Vehicles</th>
+            <th>BL Avg Time</th>
+            <th>PR Avg Time</th>
+            <th>BL Delay</th>
+            <th>PR Delay</th>
+            <th>BL Max Cong</th>
+            <th>PR Max Cong</th>
+            <th>Winner</th>
+          </tr>
+        </thead>
+        <tbody id="detailBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ML Metrics -->
+  <div class="card mt-2" id="mlMetricsCard" style="display:none;">
+    <div class="card-title mb-2"><span class="icon">🤖</span> ML Model Evaluation</div>
+    <div class="grid-2">
+      <div>
+        <div style="font-weight:700; margin-bottom:0.75rem; color:var(--accent-cyan);">
+          Traffic Level Classifier (Random Forest)
+        </div>
+        <div id="clfMetrics"></div>
+      </div>
+      <div>
+        <div style="font-weight:700; margin-bottom:0.75rem; color:var(--accent-orange);">
+          Travel Time Regressor (Random Forest)
+        </div>
+        <div id="regMetrics"></div>
+      </div>
+    </div>
+    <div class="alert alert-info mt-2">
+      ℹ️ Evaluated on 20% (1,000 records) held-out synthetic test set. Data source: generated by
+      <code>data/generate_data.py</code>. NOT real-world traffic measurements.
+    </div>
+  </div>
+
+  <!-- Feature Importance -->
+  <div class="card mt-2" id="featureCard" style="display:none;">
+    <div class="card-title mb-2"><span class="icon">🔍</span> Feature Importance (Classifier)</div>
+    <canvas id="featureChart" height="120"></canvas>
+  </div>
+
+</div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/charts.js') }}"></script>
+{% endblock %}

@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Smart Traffic Congestion Prediction & Alternate Route</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🚦</text></svg>">
+  
+  <!-- Leaflet Map CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    }
+
+    body {
+      background: linear-gradient(to right, #3882c7 0%, #2da493 100%);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 25px 15px 40px;
+    }
+
+    /* Subtle top navigation back link */
+    .nav-bar {
+      position: absolute;
+      top: 16px;
+      left: 20px;
+      display: flex;
+      gap: 12px;
+      z-index: 1000;
+    }
+
+    .nav-bar a {
+      color: rgba(255, 255, 255, 0.92);
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 600;
+      background: rgba(0, 0, 0, 0.2);
+      padding: 6px 14px;
+      border-radius: 20px;
+      backdrop-filter: blur(8px);
+      transition: all 0.2s;
+    }
+
+    .nav-bar a:hover {
+      background: rgba(255, 255, 255, 0.28);
+      color: #ffffff;
+    }
+
+    /* The Center Card */
+    .prediction-card {
+      background: #ffffff;
+      width: 100%;
+      max-width: 520px;
+      border-radius: 16px;
+      box-shadow: 0 15px 40px rgba(0, 0, 0, 0.18);
+      padding: 36px 34px 30px;
+      text-align: center;
+      animation: fadeIn 0.3s ease-out;
+      margin-top: 30px;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .card-title {
+      font-size: 25px;
+      font-weight: 700;
+      color: #111827;
+      line-height: 1.25;
+      margin-bottom: 22px;
+    }
+
+    .card-title .icon {
+      font-size: 26px;
+      margin-right: 4px;
+      display: inline-block;
+      vertical-align: middle;
+    }
+
+    .form-group {
+      margin-bottom: 13px;
+      text-align: center;
+    }
+
+    .form-group label {
+      display: block;
+      font-size: 13.5px;
+      font-weight: 600;
+      color: #1f2937;
+      margin-bottom: 5px;
+      text-align: center;
+    }
+
+    .form-control {
+      width: 100%;
+      height: 38px;
+      border: 1px solid #d1d5db;
+      border-radius: 4px;
+      padding: 0 12px;
+      font-size: 14px;
+      color: #111827;
+      background: #ffffff;
+      outline: none;
+      text-align: center;
+      box-sizing: border-box;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+
+    .form-control:focus {
+      border-color: #4a70d8;
+      box-shadow: 0 0 0 3px rgba(74, 112, 216, 0.18);
+    }
+
+    .form-control::placeholder {
+      color: #9ca3af;
+      font-size: 13px;
+    }
+
+    .predict-btn {
+      width: 100%;
+      height: 42px;
+      background: #4a70d8;
+      color: #ffffff;
+      border: none;
+      border-radius: 4px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 6px;
+      margin-bottom: 16px;
+      transition: background 0.15s, transform 0.05s;
+    }
+
+    .predict-btn:hover {
+      background: #3b5ecc;
+    }
+
+    .predict-btn:active {
+      transform: scale(0.99);
+    }
+
+    .predict-btn:disabled {
+      background: #93c5fd;
+      cursor: not-allowed;
+    }
+
+    /* Traffic Level Result */
+    .result-container {
+      margin-top: 2px;
+    }
+
+    .traffic-level-display {
+      font-size: 23px;
+      font-weight: 800;
+      color: #111827;
+      text-align: center;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .level-text {
+      color: #dc2626;
+      transition: color 0.2s;
+    }
+
+    .level-high { color: #dc2626; }
+    .level-moderate { color: #d97706; }
+    .level-low { color: #16a34a; }
+
+    /* Custom Route Information Box */
+    .route-summary-box {
+      margin-top: 16px;
+      padding: 14px;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      text-align: center;
+    }
+
+    .route-path-line {
+      font-weight: 700;
+      margin-bottom: 10px;
+      color: #0f172a;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      font-size: 13.5px;
+    }
+
+    .route-arrow {
+      color: #64748b;
+      font-size: 15px;
+    }
+
+    /* Route Comparison Cards (Alternate vs Direct) */
+    .routes-comparison-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 12px;
+      text-align: left;
+    }
+
+    .route-card-pill {
+      padding: 10px 12px;
+      border-radius: 8px;
+      border: 2px solid transparent;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .route-card-alt {
+      background: #ecfdf5;
+      border-color: #10b981;
+      color: #065f46;
+    }
+
+    .route-card-alt.active {
+      box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+    }
+
+    .route-card-direct {
+      background: #fef2f2;
+      border-color: #f87171;
+      color: #991b1b;
+    }
+
+    .route-card-direct.active {
+      box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+    }
+
+    .route-pill-title {
+      font-size: 11.5px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      margin-bottom: 3px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .route-pill-time {
+      font-size: 17px;
+      font-weight: 800;
+    }
+
+    .route-pill-detail {
+      font-size: 11px;
+      margin-top: 2px;
+      opacity: 0.9;
+    }
+
+    .time-saved-badge {
+      display: inline-block;
+      background: #10b981;
+      color: #ffffff;
+      font-size: 10.5px;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 4px;
+      margin-top: 4px;
+    }
+
+    /* Map Box */
+    .map-box-container {
+      margin-top: 10px;
+      border-radius: 10px;
+      overflow: hidden;
+      border: 1px solid #cbd5e1;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+      position: relative;
+    }
+
+    #predictMap {
+      width: 100%;
+      height: 280px;
+      background: #e2e8f0;
+      z-index: 1;
+    }
+
+    /* Map Legend Overlay */
+    .map-legend {
+      position: absolute;
+      bottom: 10px;
+      right: 10px;
+      background: rgba(255, 255, 255, 0.92);
+      padding: 6px 10px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 600;
+      color: #1e293b;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+      z-index: 500;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      text-align: left;
+    }
+
+    .legend-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .legend-line {
+      width: 16px;
+      height: 4px;
+      border-radius: 2px;
+    }
+
+    .legend-green { background: #10b981; }
+    .legend-red { background: #ef4444; }
+
+    @media (max-width: 540px) {
+      .prediction-card {
+        padding: 26px 18px 22px;
+        margin-top: 45px;
+      }
+      .card-title {
+        font-size: 21px;
+      }
+      .routes-comparison-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Minimal Nav Bar -->
+  <div class="nav-bar">
+    <a href="/">← Main Hub</a>
+    <a href="/dashboard">📊 Dashboard</a>
+    <a href="/routes">🗺️ Live Map</a>
+  </div>
+
+  <div class="prediction-card">
+    <div class="card-title">
+      <span class="icon">🚦</span>Smart Traffic<br>Congestion Prediction
+    </div>
+
+    <form id="trafficForm" action="/predict" method="POST" onsubmit="event.preventDefault(); submitPrediction(); return false;">
+      
+      <!-- Free-text Starting Location -->
+      <div class="form-group">
+        <label for="originInput">Starting Location</label>
+        <input type="text" id="originInput" name="origin_name" class="form-control" 
+               placeholder="Where you are starting from" 
+               value="{{ input_data.origin_name if input_data and input_data.origin_name else '' }}">
+      </div>
+
+      <!-- Free-text Destination -->
+      <div class="form-group">
+        <label for="destInput">Destination</label>
+        <input type="text" id="destInput" name="dest_name" class="form-control" 
+               placeholder="Where you want to go" 
+               value="{{ input_data.dest_name if input_data and input_data.dest_name else '' }}">
+      </div>
+
+      <!-- Travel Time (At which time you are travelling) -->
+      <div class="form-group">
+        <label for="travelTimeInput">Travel Time (When you are travelling)</label>
+        <input type="time" id="travelTimeInput" name="travel_time" class="form-control" 
+               value="{{ input_data.travel_time if input_data and input_data.travel_time else '09:00' }}" 
+               required>
+      </div>
+
+      <!-- Predict Button -->
+      <button type="submit" id="predictBtn" class="predict-btn">Predict</button>
+
+    </form>
+
+    <!-- Results Section -->
+    <div class="result-container">
+      <div class="traffic-level-display">
+        Traffic Level: <span id="levelValue" class="level-text {{ 'level-high' if not result or result.traffic_level == 'High' else 'level-moderate' if result.traffic_level == 'Moderate' else 'level-low' }}">
+          {{ result.traffic_level if result else 'High' }}
+        </span>
+      </div>
+
+      <!-- Custom Route & Interactive Map Section -->
+      <div id="routeSummaryBox" class="route-summary-box" style="display: {{ 'block' if result and result.route_info else 'none' }};">
+        
+        <div class="route-path-line">
+          <span id="displayOrigin">📍 {{ result.route_info.origin if result and result.route_info else 'Starting Point' }}</span>
+          <span class="route-arrow">➔</span>
+          <span id="displayDest">🎯 {{ result.route_info.dest if result and result.route_info else 'Destination' }}</span>
+        </div>
+
+        <!-- Alternate vs Direct Route Comparison Cards -->
+        <div class="routes-comparison-grid">
+          
+          <!-- 1. AI Alternate Route Card (Faster, Saves Time) -->
+          <div class="route-card-pill route-card-alt active" id="btnFocusAlt" onclick="highlightRoute('alt')">
+            <div class="route-pill-title">🚀 Fast Alternate Route</div>
+            <div class="route-pill-time" id="dispAltTime">{{ result.route_info.alternate_time_min if result and result.route_info else '25.0' }} mins</div>
+            <div class="route-pill-detail" id="dispAltDist">{{ result.route_info.alternate_distance_km if result and result.route_info else '13.5' }} km</div>
+            <div>
+              <span class="time-saved-badge" id="dispTimeSavedBadge">⚡ Saves ~<span id="dispTimeSaved">{{ result.route_info.time_saved_min if result and result.route_info else '13.5' }}</span> mins</span>
+            </div>
+          </div>
+
+          <!-- 2. Direct Congested Route Card -->
+          <div class="route-card-pill route-card-direct" id="btnFocusDirect" onclick="highlightRoute('direct')">
+            <div class="route-pill-title">🐢 Direct Congested Path</div>
+            <div class="route-pill-time" id="dispDirectTime">{{ result.route_info.baseline_time_min if result and result.route_info else '38.5' }} mins</div>
+            <div class="route-pill-detail" id="dispDirectDist">{{ result.route_info.baseline_distance_km if result and result.route_info else '14.8' }} km (Heavy Traffic)</div>
+            <div style="font-size:10.5px; color:#b91c1c; margin-top:5px; font-weight:600;">Heavy bottleneck delays</div>
+          </div>
+
+        </div>
+
+        <!-- Interactive Leaflet Map Box -->
+        <div class="map-box-container">
+          <div id="predictMap"></div>
+          
+          <!-- Legend -->
+          <div class="map-legend">
+            <div class="legend-row">
+              <span class="legend-line legend-green"></span>
+              <span>Fast Alternate Bypass</span>
+            </div>
+            <div class="legend-row">
+              <span class="legend-line legend-red"></span>
+              <span>Direct Congested Route</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Leaflet Map JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <script>
+    let pMap = null;
+    let directPolyline = null;
+    let alternatePolyline = null;
+    let originMarker = null;
+    let destMarker = null;
+    let lastRouteData = null;
+
+    // Initialize Leaflet map
+    function initMapIfNeeded() {
+      if (!pMap) {
+        pMap = L.map('predictMap', {
+          zoomControl: true,
+          attributionControl: false
+        }).setView([12.9716, 77.5946], 12);
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          maxZoom: 19
+        }).addTo(pMap);
+      }
+    }
+
+    // Render Routes on Leaflet Map
+    function renderRoutesOnMap(routeInfo) {
+      if (!routeInfo) return;
+      initMapIfNeeded();
+
+      // Clear existing layers
+      if (directPolyline) pMap.removeLayer(directPolyline);
+      if (alternatePolyline) pMap.removeLayer(alternatePolyline);
+      if (originMarker) pMap.removeLayer(originMarker);
+      if (destMarker) pMap.removeLayer(destMarker);
+
+      lastRouteData = routeInfo;
+
+      const originCoords = routeInfo.origin_coords || [12.9352, 77.6245];
+      const destCoords = routeInfo.dest_coords || [12.9855, 77.7317];
+
+      // Add Start Marker
+      originMarker = L.circleMarker([originCoords[0], originCoords[1]], {
+        radius: 8,
+        fillColor: '#2563eb',
+        color: '#ffffff',
+        weight: 2,
+        fillOpacity: 1
+      }).addTo(pMap).bindPopup('<b>📍 Starting Point:</b><br>' + (routeInfo.origin || 'Start'));
+
+      // Add Destination Marker
+      destMarker = L.circleMarker([destCoords[0], destCoords[1]], {
+        radius: 9,
+        fillColor: '#dc2626',
+        color: '#ffffff',
+        weight: 2,
+        fillOpacity: 1
+      }).addTo(pMap).bindPopup('<b>🎯 Destination:</b><br>' + (routeInfo.dest || 'Destination'));
+
+      // 1. Direct Congested Route Geometry (Red Line)
+      let baselineLatLons = [];
+      if (routeInfo.baseline_geometry && routeInfo.baseline_geometry.coordinates) {
+        baselineLatLons = routeInfo.baseline_geometry.coordinates.map(c => [c[1], c[0]]);
+      } else {
+        baselineLatLons = [
+          [originCoords[0], originCoords[1]],
+          [(originCoords[0] + destCoords[0]) / 2, (originCoords[1] + destCoords[1]) / 2],
+          [destCoords[0], destCoords[1]]
+        ];
+      }
+
+      directPolyline = L.polyline(baselineLatLons, {
+        color: '#ef4444',
+        weight: 4,
+        opacity: 0.75,
+        dashArray: '6, 6'
+      }).addTo(pMap).bindPopup('<b>🐢 Direct Route (Heavy Traffic):</b><br>' + routeInfo.baseline_time_min + ' mins | ' + routeInfo.baseline_distance_km + ' km');
+
+      // 2. AI Alternate Route Geometry (Vibrant Green Line)
+      let altLatLons = [];
+      if (routeInfo.alternate_geometry && routeInfo.alternate_geometry.coordinates) {
+        altLatLons = routeInfo.alternate_geometry.coordinates.map(c => [c[1], c[0]]);
+      } else {
+        // Offset curved path for alternate
+        const midLat = (originCoords[0] + destCoords[0]) / 2 + 0.018;
+        const midLon = (originCoords[1] + destCoords[1]) / 2 - 0.018;
+        altLatLons = [
+          [originCoords[0], originCoords[1]],
+          [midLat, midLon],
+          [destCoords[0], destCoords[1]]
+        ];
+      }
+
+      alternatePolyline = L.polyline(altLatLons, {
+        color: '#10b981',
+        weight: 6,
+        opacity: 0.95
+      }).addTo(pMap).bindPopup('<b>🚀 Fast Alternate Route:</b><br>' + routeInfo.alternate_time_min + ' mins | ' + routeInfo.alternate_distance_km + ' km<br>⚡ Saves ~' + routeInfo.time_saved_min + ' mins!');
+
+      // Fit map view to bounds
+      const bounds = L.latLngBounds([...baselineLatLons, ...altLatLons]);
+      pMap.fitBounds(bounds, { padding: [25, 25] });
+
+      setTimeout(() => {
+        if (pMap) pMap.invalidateSize();
+      }, 200);
+    }
+
+    // Highlight Alternate vs Direct
+    function highlightRoute(type) {
+      if (!pMap || !directPolyline || !alternatePolyline) return;
+
+      const altBtn = document.getElementById('btnFocusAlt');
+      const directBtn = document.getElementById('btnFocusDirect');
+
+      if (type === 'alt') {
+        altBtn.classList.add('active');
+        directBtn.classList.remove('active');
+        alternatePolyline.setStyle({ weight: 7, opacity: 1.0 });
+        directPolyline.setStyle({ weight: 3, opacity: 0.5 });
+        alternatePolyline.bringToFront();
+        alternatePolyline.openPopup();
+      } else {
+        directBtn.classList.add('active');
+        altBtn.classList.remove('active');
+        directPolyline.setStyle({ weight: 6, opacity: 1.0 });
+        alternatePolyline.setStyle({ weight: 4, opacity: 0.6 });
+        directPolyline.bringToFront();
+        directPolyline.openPopup();
+      }
+    }
+
+    // Ajax Prediction Handler
+    async function submitPrediction() {
+      const btn = document.getElementById('predictBtn');
+      const originInput = document.getElementById('originInput');
+      const destInput = document.getElementById('destInput');
+      const travelTimeInput = document.getElementById('travelTimeInput');
+
+      const timeVal = travelTimeInput ? travelTimeInput.value || '09:00' : '09:00';
+      const parts = timeVal.split(':');
+      const hour = parseInt(parts[0]) || 9;
+
+      const payload = {
+        origin_name: originInput.value.trim(),
+        dest_name: destInput.value.trim(),
+        travel_time: timeVal,
+        hour: hour
+      };
+
+      btn.disabled = true;
+      btn.textContent = 'Predicting & Routing…';
+
+      try {
+        const response = await fetch('/predict', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          },
+          body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+          throw new Error('Prediction request failed');
+        }
+
+        const data = await response.json();
+        if (data.success && data.result) {
+          const res = data.result;
+          const levelSpan = document.getElementById('levelValue');
+          levelSpan.textContent = res.traffic_level || 'High';
+
+          // Update color class
+          levelSpan.classList.remove('level-high', 'level-moderate', 'level-low');
+          if (res.traffic_level === 'High') {
+            levelSpan.classList.add('level-high');
+          } else if (res.traffic_level === 'Moderate') {
+            levelSpan.classList.add('level-moderate');
+          } else {
+            levelSpan.classList.add('level-low');
+          }
+
+          // Route & Map Display
+          const routeBox = document.getElementById('routeSummaryBox');
+          if (res.route_info) {
+            routeBox.style.display = 'block';
+
+            document.getElementById('displayOrigin').textContent = '📍 ' + (res.route_info.origin || 'Start');
+            document.getElementById('displayDest').textContent = '🎯 ' + (res.route_info.dest || 'Destination');
+
+            // Alternate metrics
+            document.getElementById('dispAltTime').textContent = res.route_info.alternate_time_min + ' mins';
+            document.getElementById('dispAltDist').textContent = res.route_info.alternate_distance_km + ' km';
+            document.getElementById('dispTimeSaved').textContent = res.route_info.time_saved_min;
+
+            // Direct metrics
+            document.getElementById('dispDirectTime').textContent = res.route_info.baseline_time_min + ' mins';
+            document.getElementById('dispDirectDist').textContent = res.route_info.baseline_distance_km + ' km (Heavy Traffic)';
+
+            // Render Map
+            renderRoutesOnMap(res.route_info);
+          } else {
+            routeBox.style.display = 'none';
+          }
+        }
+      } catch (err) {
+        console.error('Prediction error:', err);
+        // Fallback: regular form submit
+        document.getElementById('trafficForm').submit();
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Predict';
+      }
+    }
+
+    // Auto-init map if server already rendered initial result with route
+    window.addEventListener('DOMContentLoaded', () => {
+      {% if result and result.route_info %}
+        const initialData = {{ result.route_info | tojson }};
+        if (initialData) {
+          renderRoutesOnMap(initialData);
+        }
+      {% endif %}
+    });
+  </script>
+</body>
+</html>

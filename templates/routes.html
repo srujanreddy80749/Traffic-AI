@@ -1,0 +1,583 @@
+{% extends "base.html" %}
+{% block title %}All-India Traffic Navigator & Route Recommendation — AI Traffic System{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+  .mode-tabs {
+    display: flex;
+    gap: 0.75rem;
+    margin-bottom: 1.5rem;
+    background: rgba(255, 255, 255, 0.04);
+    padding: 0.4rem;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-color);
+  }
+  .mode-tab-btn {
+    flex: 1;
+    padding: 0.75rem 1rem;
+    font-weight: 600;
+    font-size: 0.95rem;
+    border-radius: var(--radius-sm);
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+  }
+  .mode-tab-btn.active {
+    background: var(--surface-card);
+    color: var(--text-primary);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+    border: 1px solid var(--border-color);
+  }
+  .mode-tab-btn.active.india-tab {
+    color: #38bdf8;
+    border-color: rgba(56, 189, 248, 0.35);
+  }
+  .corridor-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+  }
+  .corridor-chip {
+    padding: 0.35rem 0.75rem;
+    font-size: 0.8rem;
+    font-weight: 500;
+    border-radius: 9999px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .corridor-chip:hover {
+    background: rgba(56, 189, 248, 0.15);
+    border-color: rgba(56, 189, 248, 0.4);
+    color: #fff;
+    transform: translateY(-1px);
+  }
+  .corridor-chip.active {
+    background: rgba(56, 189, 248, 0.25);
+    border-color: #38bdf8;
+    color: #38bdf8;
+    font-weight: 600;
+  }
+  .autocomplete-results {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    z-index: 1000;
+    background: var(--surface-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    max-height: 180px;
+    overflow-y: auto;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+    display: none;
+  }
+  .autocomplete-item {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.82rem;
+    cursor: pointer;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+  }
+  .autocomplete-item:hover {
+    background: rgba(56, 189, 248, 0.15);
+    color: #38bdf8;
+  }
+  .traffic-stat-pill {
+    padding: 0.35rem 0.65rem;
+    border-radius: 6px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+  .pill-high { background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); }
+  .pill-med { background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
+  .pill-low { background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-wrapper">
+<div class="container">
+
+  <!-- Header -->
+  <div class="section-header">
+    <span class="section-label">Intelligent Transportation Routing</span>
+    <h2>🗺️ Congestion-Aware Route Recommendation</h2>
+    <p class="text-muted">Analyze live traffic densities, vehicle volumes, and bottleneck delay across India to discover AI-optimized alternate routes.</p>
+  </div>
+
+  <!-- Mode Selector Tabs -->
+  <div class="mode-tabs">
+    <button class="mode-tab-btn active india-tab" onclick="switchRouteMode('india')" id="tabBtnIndia">
+      🇮🇳 All-India Live Traffic Navigator
+    </button>
+    <button class="mode-tab-btn" onclick="switchRouteMode('lab')" id="tabBtnLab">
+      🔬 8-Node Abstract Simulation Lab
+    </button>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- MODE 1: ALL-INDIA LIVE TRAFFIC NAVIGATOR                                  -->
+  <!-- ========================================================================= -->
+  <div id="indiaRouteSection">
+    
+    <!-- Corridor Preset Chips -->
+    <div class="card mb-2" style="padding:1rem;">
+      <div class="flex justify-between items-center mb-1">
+        <span class="text-xs text-muted" style="text-transform:uppercase; letter-spacing:0.05em; font-weight:700;">
+          ⚡ Popular Indian Traffic Corridors (Click to Load)
+        </span>
+        <span class="text-xs text-muted">Or enter any custom Indian address below</span>
+      </div>
+      <div class="corridor-chips" id="corridorChipsList">
+        <!-- Dynamically filled with top corridors -->
+      </div>
+    </div>
+
+    <div class="grid-2" style="gap:1.25rem; align-items:start;">
+      <!-- Parameters Form -->
+      <div>
+        <div class="card mb-2">
+          <div class="card-title mb-2"><span class="icon">📍</span> Origin & Destination</div>
+
+          <!-- Vehicle Mission / Purpose Mode Selector -->
+          <div class="form-group mb-2">
+            <label class="form-label text-xs text-muted" style="text-transform:uppercase; letter-spacing:0.5px; font-weight:700;">Vehicle Mode / Mission:</label>
+            <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+              <button type="button" class="btn btn-secondary flex-1" id="routeModeAmbulance" onclick="setRouteVehicleMode('ambulance')" style="font-size:0.8rem; padding:0.45rem 0.5rem; font-weight:700;">
+                🚑 Ambulance
+              </button>
+              <button type="button" class="btn btn-secondary flex-1" id="routeModeDelivery" onclick="setRouteVehicleMode('delivery')" style="font-size:0.8rem; padding:0.45rem 0.5rem; font-weight:700;">
+                🛵 Delivery
+              </button>
+              <button type="button" class="btn btn-secondary flex-1 active" id="routeModeCommute" onclick="setRouteVehicleMode('commute')" style="font-size:0.8rem; padding:0.45rem 0.5rem; font-weight:700;">
+                🚗 Commuter
+              </button>
+            </div>
+          </div>
+
+          <!-- Origin -->
+          <div class="form-group" style="position:relative;">
+            <label class="form-label flex justify-between">
+              <span>Start Location (Origin in India)</span>
+              <span class="text-xs text-muted" id="originCoordsBadge">Coords: 12.9176, 77.6238</span>
+            </label>
+            <div style="display:flex; gap:0.5rem;">
+              <input type="text" id="indiaOriginInput" class="form-control" 
+                     placeholder="e.g. Silk Board, Bengaluru or Connaught Place, Delhi" 
+                     value="Central Silk Board, Bengaluru" autocomplete="off">
+              <button class="btn btn-secondary" onclick="searchLocation('origin')" title="Search location" style="padding:0 0.9rem;">
+                🔍
+              </button>
+            </div>
+            <div id="originAutocomplete" class="autocomplete-results"></div>
+          </div>
+
+          <!-- Destination -->
+          <div class="form-group" style="position:relative;">
+            <label class="form-label flex justify-between">
+              <span>End Location (Destination in India)</span>
+              <span class="text-xs text-muted" id="destCoordsBadge">Coords: 12.9855, 77.7317</span>
+            </label>
+            <div style="display:flex; gap:0.5rem;">
+              <input type="text" id="indiaDestInput" class="form-control" 
+                     placeholder="e.g. Whitefield ITPL, Bengaluru or Cyber City, Gurugram" 
+                     value="ITPL Main Road, Whitefield, Bengaluru" autocomplete="off">
+              <button class="btn btn-secondary" onclick="searchLocation('dest')" title="Search location" style="padding:0 0.9rem;">
+                🔍
+              </button>
+            </div>
+            <div id="destAutocomplete" class="autocomplete-results"></div>
+          </div>
+
+          <!-- Traffic & Environment Conditions -->
+          <div class="grid-2 mt-1">
+            <div class="form-group">
+              <label class="form-label">Departure Hour (0-23)</label>
+              <select id="indiaHour" class="form-control">
+                <option value="8">08:00 AM (Morning Peak)</option>
+                <option value="9" selected>09:00 AM (Peak Rush)</option>
+                <option value="10">10:00 AM (Heavy Commute)</option>
+                <option value="13">01:00 PM (Afternoon Flow)</option>
+                <option value="17">05:00 PM (Evening Start)</option>
+                <option value="18">06:00 PM (Evening Peak)</option>
+                <option value="20">08:00 PM (Night Rush)</option>
+                <option value="23">11:00 PM (Free Flow)</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Day of Week</label>
+              <select id="indiaDay" class="form-control">
+                <option value="0" selected>Monday (High Flow)</option>
+                <option value="1">Tuesday</option>
+                <option value="2">Wednesday</option>
+                <option value="3">Thursday</option>
+                <option value="4">Friday (Peak Surge)</option>
+                <option value="5">Saturday (Moderate)</option>
+                <option value="6">Sunday (Leisure Flow)</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Weather Condition</label>
+              <select id="indiaWeather" class="form-control">
+                <option value="0" selected>☀️ Clear / Normal</option>
+                <option value="1">🌧️ Heavy Monsoon Rain (+Waterlogging)</option>
+                <option value="2">🌫️ Winter Fog / Low Visibility</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Traffic Incident on Primary</label>
+              <select id="indiaIncident" class="form-control">
+                <option value="None" selected>None (Standard Congestion)</option>
+                <option value="Flyover Construction">🚧 Flyover / Metro Construction</option>
+                <option value="Waterlogged Underpass">🌊 Waterlogged Underpass</option>
+                <option value="Stalled Bus / Breakdown">🚌 Breakdown / Bus Stalled</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label flex justify-between">
+              <span>Vehicles to Reroute onto Alternate Road</span>
+              <span id="rerouteValBadge" class="text-xs text-muted">150 vehicles</span>
+            </label>
+            <input type="range" id="indiaVehiclesReroute" min="20" max="400" step="10" value="150" 
+                   class="form-control" style="cursor:pointer;"
+                   oninput="document.getElementById('rerouteValBadge').textContent = this.value + ' vehicles'">
+          </div>
+
+          <button class="btn btn-primary w-full" onclick="analyzeIndiaRoutes()" id="indiaFindBtn" style="padding:0.85rem; font-size:1rem;">
+            🚦 Analyze Traffic & Recommend Alternate Route
+          </button>
+        </div>
+
+        <!-- AI Reasoning Box -->
+        <div id="indiaExplanationBox" style="display:none;">
+          <div class="explanation-box" style="border-left: 4px solid var(--accent-green); background: rgba(16, 185, 129, 0.08);">
+            <div style="font-weight:700; color:var(--accent-green); margin-bottom:0.4rem; display:flex; align-items:center; gap:0.4rem;">
+              <span>🧠 AI Decision & Rerouting Reasoning</span>
+            </div>
+            <div class="explanation-text" id="indiaExplanationText" style="color:var(--text-primary); font-size:0.88rem; line-height:1.55;"></div>
+          </div>
+        </div>
+
+        <!-- Bottleneck Alert Card -->
+        <div id="indiaBottleneckCard" class="card mt-2" style="display:none; border:1px solid rgba(239, 68, 68, 0.35); background: rgba(239, 68, 68, 0.04);">
+          <div class="card-title flex items-center gap-1" style="color:#f87171;">
+            <span>⚠️ Identified Congestion Bottleneck</span>
+          </div>
+          <div class="text-sm mt-1" id="bottleneckLocationText" style="font-weight:600;"></div>
+          <div class="grid-3 mt-1" style="gap:0.75rem;">
+            <div>
+              <div class="text-xs text-muted">Vehicles Queued</div>
+              <div id="bottleneckVehicles" style="font-size:1.2rem; font-weight:800; color:#f87171;">–</div>
+            </div>
+            <div>
+              <div class="text-xs text-muted">Average Speed</div>
+              <div id="bottleneckSpeed" style="font-size:1.2rem; font-weight:800; color:#fbbf24;">–</div>
+            </div>
+            <div>
+              <div class="text-xs text-muted">Bottleneck Delay</div>
+              <div id="bottleneckDelay" style="font-size:1.2rem; font-weight:800; color:#f87171;">–</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Map View -->
+      <div class="card" style="padding:0.75rem; position:relative;">
+        <div class="loading-overlay" id="indiaMapLoader">
+          <div class="spinner"></div><span>Fetching routes, vehicle loads & congestion data…</span>
+        </div>
+        <div id="indiaRouteMap" style="height:480px; border-radius:var(--radius-sm); z-index:1;"></div>
+        
+        <!-- Legend -->
+        <div style="display:flex; gap:1.25rem; padding:0.75rem 0.25rem 0; flex-wrap:wrap; font-size:0.8rem; align-items:center;">
+          <span style="color:var(--text-muted); font-weight:600;">Legend:</span>
+          <span><span style="color:#ef4444; font-weight:bold;">━━</span> Primary Route (Heavy Traffic)</span>
+          <span><span style="color:#10b981; font-weight:bold;">━━</span> AI Recommended Alternate Route</span>
+          <span class="traffic-stat-pill pill-high">🔴 Severe (>85% cap)</span>
+          <span class="traffic-stat-pill pill-med">🟡 Moderate</span>
+          <span class="traffic-stat-pill pill-low">🟢 Smooth Flow</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Comparative Results Cards -->
+    <div id="indiaResultsSection" style="display:none; margin-top:1.5rem;">
+      <div class="grid-2 mb-2" style="gap:1.25rem;">
+        
+        <!-- Standard Route Card -->
+        <div class="card route-card best-baseline">
+          <div class="flex justify-between items-center mb-1">
+            <div class="card-title" style="color:var(--accent-orange);">⚡ Standard Direct Route</div>
+            <span class="traffic-stat-pill pill-high" id="indiaBaselineBadge">Heavy Traffic</span>
+          </div>
+          <div class="text-sm text-muted mb-2" id="indiaBaselineDesc">Direct arterial road (carries bulk commuter traffic)</div>
+          
+          <div class="grid-3" style="gap:0.75rem;">
+            <div>
+              <div class="text-xs text-muted">Travel Time with Traffic</div>
+              <div id="indiaBaselineTime" style="font-size:1.6rem; font-weight:800; color:var(--accent-orange);">–</div>
+            </div>
+            <div>
+              <div class="text-xs text-muted">Distance & Free-Flow</div>
+              <div id="indiaBaselineDist" style="font-weight:700;">–</div>
+              <div id="indiaBaselineFreeflow" class="text-xs text-muted">Free-flow: –</div>
+            </div>
+            <div>
+              <div class="text-xs text-muted">Vehicles on Road</div>
+              <div id="indiaBaselineVehicles" style="font-size:1.3rem; font-weight:800; color:#f87171;">–</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- AI Proposed Alternate Route Card -->
+        <div class="card route-card best-proposed">
+          <div class="flex justify-between items-center mb-1">
+            <div class="card-title" style="color:var(--accent-green);">🧠 AI Alternate Route</div>
+            <span class="traffic-stat-pill pill-low" id="indiaProposedBadge">AI Recommended</span>
+          </div>
+          <div class="text-sm text-muted mb-2" id="indiaProposedDesc">Congestion-aware bypass / secondary arterial corridor</div>
+          
+          <div class="grid-3" style="gap:0.75rem;">
+            <div>
+              <div class="text-xs text-muted">Travel Time with Traffic</div>
+              <div id="indiaProposedTime" style="font-size:1.6rem; font-weight:800; color:var(--accent-green);">–</div>
+            </div>
+            <div>
+              <div class="text-xs text-muted">Distance & Delay Saved</div>
+              <div id="indiaProposedDist" style="font-weight:700;">–</div>
+              <div id="indiaTimeSavedBadge" style="font-size:0.85rem; font-weight:800; color:var(--accent-green);">Saves: –</div>
+            </div>
+            <div>
+              <div class="text-xs text-muted">Marginal Impact</div>
+              <div id="indiaProposedImpact" style="font-size:1.3rem; font-weight:800; color:#38bdf8;">–</div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Simulation Connect Card -->
+      <div class="card mb-2" style="background:rgba(16, 185, 129, 0.08); border:1px solid rgba(16, 185, 129, 0.3); padding:1rem; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:1rem;">
+        <div>
+          <div style="font-weight:700; color:var(--accent-green); font-size:0.95rem; display:flex; align-items:center; gap:0.4rem;">
+            <span>⚙️</span>
+            <span>Simulate Traffic Load for this Corridor in Lab</span>
+          </div>
+          <div class="text-xs text-muted" style="margin-top:2px;">
+            Simulate 200+ vehicles entering this network under BPR flow and compare Baseline vs AI Proposed rerouting.
+          </div>
+        </div>
+        <div style="display:flex; gap:0.5rem;">
+          <a id="btnSimulateFromRoute" href="/simulation" class="btn btn-success" style="padding:0.5rem 1rem; font-size:0.85rem; font-weight:700; text-decoration:none;">
+            ▶ Run Traffic Simulation ➔
+          </a>
+          <a href="/predict" class="btn btn-secondary" style="padding:0.5rem 1rem; font-size:0.85rem; font-weight:700; text-decoration:none;">
+            🚦 AI Predictor
+          </a>
+        </div>
+      </div>
+
+      <!-- Segment-by-Segment Vehicle & Speed Breakdown Table -->
+      <div class="card">
+        <div class="card-title mb-2"><span class="icon">📊</span> Road Stretch Breakdown & Vehicle Loads</div>
+        <div class="table-wrapper">
+          <table id="indiaSegmentsTable">
+            <thead>
+              <tr>
+                <th>Route</th>
+                <th>Stretch #</th>
+                <th>Vehicles on Stretch</th>
+                <th>Estimated Speed</th>
+                <th>Traffic Status</th>
+              </tr>
+            </thead>
+            <tbody id="indiaSegmentsBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- MODE 2: 8-NODE ABSTRACT SIMULATION LAB (ORIGINAL BENCHMARK)                -->
+  <!-- ========================================================================= -->
+  <div id="labRouteSection" style="display:none;">
+    <div class="grid-2" style="gap:1.25rem; align-items:start;">
+      <!-- Controls -->
+      <div>
+        <div class="card mb-2">
+          <div class="card-title mb-2"><span class="icon">⚙️</span> Network Graph Parameters</div>
+
+          <div class="grid-2">
+            <div class="form-group">
+              <label class="form-label">Origin Node</label>
+              <select id="sourceNode" class="form-control">
+                {% for id, node in nodes.items() %}
+                <option value="{{ id }}" {% if id=='A' %}selected{% endif %}>{{ id }} – {{ node.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Destination Node</label>
+              <select id="targetNode" class="form-control">
+                {% for id, node in nodes.items() %}
+                <option value="{{ id }}" {% if id=='G' %}selected{% endif %}>{{ id }} – {{ node.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Hour of Day</label>
+              <input type="number" id="routeHour" class="form-control" value="8" min="0" max="23">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Day of Week</label>
+              <select id="routeDay" class="form-control">
+                <option value="0">Monday</option><option value="1">Tuesday</option>
+                <option value="2">Wednesday</option><option value="3">Thursday</option>
+                <option value="4">Friday</option><option value="5">Saturday</option>
+                <option value="6">Sunday</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Weather</label>
+              <select id="routeWeather" class="form-control">
+                <option value="0">☀️ Clear</option><option value="1">🌧️ Rain</option>
+                <option value="2">🌫️ Fog</option><option value="3">❄️ Snow</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Vehicles Rerouting</label>
+              <input type="number" id="nVehicles" class="form-control" value="50" min="1" max="300">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Accident / Road Closure</label>
+            <select id="routeAccident" class="form-control">
+              <option value="">None</option>
+              <option value="A-B">A→B Road</option>
+              <option value="A-C">A→C Road</option>
+              <option value="B-F">B→F Road</option>
+            </select>
+          </div>
+
+          <button class="btn btn-primary w-full" onclick="findRoutes()" id="findBtn">
+            🔍 Find & Compare Graph Routes
+          </button>
+        </div>
+
+        <!-- AI Explanation -->
+        <div id="explanationBox" style="display:none;">
+          <div class="explanation-box">
+            <div class="explanation-text" id="explanationText"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Map -->
+      <div class="card" style="padding:0.75rem; position:relative;">
+        <div class="loading-overlay" id="routeMapLoader">
+          <div class="spinner"></div><span>Calculating routes…</span>
+        </div>
+        <div id="routeMap" style="height:420px;"></div>
+        <div style="display:flex; gap:1rem; padding:0.75rem 0 0; flex-wrap:wrap; font-size:0.78rem;">
+          <span style="color:var(--text-muted);">Routes:</span>
+          <span><span style="color:#f59e0b;">━━</span> Baseline (fastest now)</span>
+          <span><span style="color:#10b981;">━━</span> Proposed (AI recommended)</span>
+          <span><span style="color:#8b5cf6;">━━</span> Alternative</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Route Cards -->
+    <div id="routeResults" style="display:none; margin-top:1.25rem;">
+      <div class="section-header">
+        <h2 style="font-size:1.3rem;">Graph Route Comparison</h2>
+      </div>
+
+      <div class="grid-2 mb-2">
+        <div class="card route-card best-baseline">
+          <div class="flex justify-between items-center mb-1">
+            <div class="card-title">⚡ Baseline Route</div>
+            <span class="badge badge-medium">Shortest Now</span>
+          </div>
+          <div id="baselinePath" class="text-sm text-muted mb-1"></div>
+          <div class="grid-2" style="gap:0.75rem; margin-top:0.75rem;">
+            <div>
+              <div class="text-xs text-muted">Current Travel Time</div>
+              <div id="baselineTime" style="font-size:1.4rem; font-weight:800; color:var(--accent-orange);">–</div>
+            </div>
+            <div>
+              <div class="text-xs text-muted">Congestion Level</div>
+              <div id="baselineCongestion">–</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card route-card best-proposed">
+          <div class="flex justify-between items-center mb-1">
+            <div class="card-title">🧠 Proposed Route</div>
+            <span class="badge badge-low">AI Recommended</span>
+          </div>
+          <div id="proposedPath" class="text-sm text-muted mb-1"></div>
+          <div class="grid-2" style="gap:0.75rem; margin-top:0.75rem;">
+            <div>
+              <div class="text-xs text-muted">Predicted Future Time</div>
+              <div id="proposedTime" style="font-size:1.4rem; font-weight:800; color:var(--accent-green);">–</div>
+            </div>
+            <div>
+              <div class="text-xs text-muted">Network Impact (+min)</div>
+              <div id="proposedImpact">–</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- All Routes Table -->
+      <div class="card">
+        <div class="card-title mb-2"><span class="icon">📋</span> All Available Graph Paths</div>
+        <div class="table-wrapper">
+          <table id="allRoutesTable">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Path</th>
+                <th>Hops</th>
+                <th>Current Time (min)</th>
+                <th>Baseline?</th>
+                <th>Proposed?</th>
+              </tr>
+            </thead>
+            <tbody id="allRoutesBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="{{ url_for('static', filename='js/map.js') }}"></script>
+{% endblock %}

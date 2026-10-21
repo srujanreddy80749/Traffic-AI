@@ -1,0 +1,174 @@
+{% extends "base.html" %}
+{% block title %}About — AI Traffic System{% endblock %}
+
+{% block content %}
+<div class="page-wrapper">
+<div class="container" style="max-width:900px;">
+
+  <div class="section-header">
+    <span class="section-label">Project Documentation</span>
+    <h2>ℹ️ About This Project</h2>
+  </div>
+
+  <div class="grid-2 mb-2">
+    <div class="card">
+      <div class="card-title mb-2">🎯 Project Objective</div>
+      <p class="text-sm" style="line-height:1.8; color:var(--text-muted);">
+        This is a <strong style="color:var(--text-primary);">college project</strong> that
+        investigates whether considering <em>predicted future congestion</em> and the
+        <em>impact of rerouting vehicles</em> can reduce overall traffic delay compared to
+        simply picking the fastest current route.
+      </p>
+      <p class="text-sm mt-1" style="line-height:1.8; color:var(--text-muted);">
+        The idea is not completely new — real-world systems like Waze and Google Maps
+        already use some form of rerouting awareness. This project implements
+        an <strong style="color:var(--text-primary);">experimental, simplified version</strong>
+        and evaluates it against a baseline.
+      </p>
+    </div>
+
+    <div class="card">
+      <div class="card-title mb-2">⚠️ What is Simulated vs Real</div>
+      <table style="font-size:0.82rem;">
+        <tr><td style="padding:0.4rem 0.6rem; color:var(--text-muted);">Road network</td><td><span class="badge badge-medium">Synthetic</span></td></tr>
+        <tr><td style="padding:0.4rem 0.6rem; color:var(--text-muted);">Traffic data</td><td><span class="badge badge-medium">Synthetic</span></td></tr>
+        <tr><td style="padding:0.4rem 0.6rem; color:var(--text-muted);">ML model</td><td><span class="badge badge-blue">Real (trained on synthetic data)</span></td></tr>
+        <tr><td style="padding:0.4rem 0.6rem; color:var(--text-muted);">BPR routing</td><td><span class="badge badge-blue">Real algorithm (standard BPR)</span></td></tr>
+        <tr><td style="padding:0.4rem 0.6rem; color:var(--text-muted);">Simulation</td><td><span class="badge badge-medium">Python macroscopic (not SUMO)</span></td></tr>
+        <tr><td style="padding:0.4rem 0.6rem; color:var(--text-muted);">Map tiles</td><td><span class="badge badge-blue">Real (OpenStreetMap)</span></td></tr>
+        <tr><td style="padding:0.4rem 0.6rem; color:var(--text-muted);">Live traffic</td><td><span class="badge badge-high">Not connected</span></td></tr>
+      </table>
+    </div>
+  </div>
+
+  <!-- Architecture -->
+  <div class="card mb-2">
+    <div class="card-title mb-2">🏗️ System Architecture</div>
+    <div class="grid-3" style="gap:1rem; text-align:center;">
+      <div style="padding:1rem; border:1px solid var(--border); border-radius:var(--radius-sm);">
+        <div style="font-size:2rem; margin-bottom:0.5rem;">🌐</div>
+        <div style="font-weight:700; margin-bottom:0.3rem;">Frontend</div>
+        <div class="text-sm text-muted">HTML5 · CSS3 · JavaScript<br>Leaflet.js · Chart.js</div>
+      </div>
+      <div style="padding:1rem; border:1px solid var(--border); border-radius:var(--radius-sm);">
+        <div style="font-size:2rem; margin-bottom:0.5rem;">⚡</div>
+        <div style="font-weight:700; margin-bottom:0.3rem;">Backend</div>
+        <div class="text-sm text-muted">Python 3 · Flask<br>REST JSON APIs</div>
+      </div>
+      <div style="padding:1rem; border:1px solid var(--border); border-radius:var(--radius-sm);">
+        <div style="font-size:2rem; margin-bottom:0.5rem;">🤖</div>
+        <div style="font-weight:700; margin-bottom:0.3rem;">ML / AI</div>
+        <div class="text-sm text-muted">scikit-learn · Pandas<br>Random Forest</div>
+      </div>
+      <div style="padding:1rem; border:1px solid var(--border); border-radius:var(--radius-sm);">
+        <div style="font-size:2rem; margin-bottom:0.5rem;">🕸️</div>
+        <div style="font-weight:700; margin-bottom:0.3rem;">Routing</div>
+        <div class="text-sm text-muted">NetworkX · BPR model<br>Dijkstra + Composite score</div>
+      </div>
+      <div style="padding:1rem; border:1px solid var(--border); border-radius:var(--radius-sm);">
+        <div style="font-size:2rem; margin-bottom:0.5rem;">⚙️</div>
+        <div style="font-weight:700; margin-bottom:0.3rem;">Simulation</div>
+        <div class="text-sm text-muted">Python discrete-time<br>macroscopic model</div>
+      </div>
+      <div style="padding:1rem; border:1px solid var(--border); border-radius:var(--radius-sm);">
+        <div style="font-size:2rem; margin-bottom:0.5rem;">🗄️</div>
+        <div style="font-weight:700; margin-bottom:0.3rem;">Storage</div>
+        <div class="text-sm text-muted">SQLite<br>Prediction / Sim logs</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- File Structure -->
+  <div class="card mb-2">
+    <div class="card-title mb-2">📁 Project File Structure</div>
+    <pre style="font-size:0.8rem; color:var(--text-muted); line-height:1.8; overflow-x:auto;">
+traffic-management-system/
+├── app.py                    ← Flask app, all routes &amp; API endpoints
+├── requirements.txt          ← Python dependencies
+├── README.md                 ← Setup &amp; run instructions
+│
+├── data/
+│   ├── generate_data.py      ← Synthetic dataset generator (5,000 records)
+│   ├── traffic_data.csv      ← Generated on first run
+│   └── traffic.db            ← SQLite log (predictions &amp; simulations)
+│
+├── models/
+│   ├── classifier.pkl        ← Trained RandomForest classifier (traffic level)
+│   ├── regressor.pkl         ← Trained RandomForest regressor (travel time)
+│   └── metrics.json          ← Accuracy, F1, MAE, R² on test set
+│
+├── services/
+│   ├── prediction.py         ← ML training, loading, prediction API
+│   ├── routing.py            ← NetworkX graph, BPR model, route comparison
+│   └── simulation.py         ← Discrete-time traffic simulation
+│
+├── templates/
+│   ├── base.html             ← Navigation, footer, CDN links
+│   ├── index.html            ← Home page
+│   ├── dashboard.html        ← Traffic map &amp; network status
+│   ├── routes.html           ← Route recommendation page
+│   ├── prediction.html       ← ML prediction form
+│   ├── simulation.html       ← Simulation control panel
+│   ├── comparison.html       ← Performance comparison charts
+│   └── about.html            ← This page
+│
+└── static/
+    ├── css/style.css         ← Dark-mode dashboard stylesheet
+    └── js/
+        ├── dashboard.js      ← Dashboard map &amp; chart logic
+        ├── map.js            ← Route map logic
+        └── charts.js         ← Prediction &amp; comparison charts
+    </pre>
+  </div>
+
+  <!-- Limitations -->
+  <div class="card mb-2">
+    <div class="card-title mb-2">🚧 Known Limitations</div>
+    <ul style="list-style:none; display:flex; flex-direction:column; gap:0.75rem; font-size:0.875rem;">
+      <li><span style="color:var(--accent-orange);">⚠</span> <strong>No real-time data:</strong> The system does not connect to any live traffic API. All congestion values are simulated.</li>
+      <li><span style="color:var(--accent-orange);">⚠</span> <strong>Synthetic training data:</strong> The ML model is trained on generated data, not actual road measurements. It should not be used for real predictions.</li>
+      <li><span style="color:var(--accent-orange);">⚠</span> <strong>Small network:</strong> The road graph has only 8 nodes — results on a city-scale network would differ.</li>
+      <li><span style="color:var(--accent-orange);">⚠</span> <strong>Macroscopic simulation:</strong> Individual vehicle behaviour, traffic signals, and turning movements are not modelled.</li>
+      <li><span style="color:var(--accent-orange);">⚠</span> <strong>Simplified rerouting impact:</strong> The rerouting model assumes all diverted vehicles take the exact alternative route, which overestimates impact.</li>
+      <li><span style="color:var(--accent-green);">✓</span> <strong>SUMO not used:</strong> SUMO requires complex configuration and network files. A documented Python simulation is used instead.</li>
+    </ul>
+  </div>
+
+  <!-- References -->
+  <div class="card mb-2">
+    <div class="card-title mb-2">📚 References &amp; Data Sources</div>
+    <ul style="list-style:none; display:flex; flex-direction:column; gap:0.6rem; font-size:0.85rem; color:var(--text-muted);">
+      <li>📄 Bureau of Public Roads (BPR) function — US Federal Highway Administration travel-time formula (α=0.15, β=4)</li>
+      <li>📄 Dijkstra, E. W. (1959). A note on two problems in connexion with graphs. Numerische Mathematik.</li>
+      <li>📄 Breiman, L. (2001). Random Forests. Machine Learning, 45(1), 5–32.</li>
+      <li>📄 NetworkX Python library — Hagberg, A. et al. (2008). Exploring network structure.</li>
+      <li>📄 OpenStreetMap contributors — Map data © OpenStreetMap contributors (ODbL).</li>
+      <li>📄 Scikit-learn: Machine Learning in Python — Pedregosa et al. (2011), JMLR 12, pp. 2825–2830.</li>
+      <li>📝 Training dataset: Synthetically generated by <code>data/generate_data.py</code> using domain-knowledge rules. No real-world source.</li>
+    </ul>
+  </div>
+
+  <!-- Run Instructions -->
+  <div class="card">
+    <div class="card-title mb-2">▶️ How to Run (Windows PowerShell)</div>
+    <pre style="background:rgba(0,0,0,0.4); border:1px solid var(--border); border-radius:var(--radius-sm); padding:1rem; font-size:0.82rem; overflow-x:auto; color:#a5f3fc;">
+# 1. Navigate to project folder
+cd "C:\Users\User\Desktop\traffic ai"
+
+# 2. Install dependencies (already installed if you followed setup)
+pip install flask pandas scikit-learn networkx numpy
+
+# 3. Run the application
+python app.py
+
+# 4. Open in browser
+# http://127.0.0.1:5000
+    </pre>
+    <div class="alert alert-success mt-2">
+      ✅ On first run, the app automatically generates the synthetic dataset and trains the ML models (~10 seconds). Subsequent starts load the cached models instantly.
+    </div>
+  </div>
+
+</div>
+</div>
+{% endblock %}

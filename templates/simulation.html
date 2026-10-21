@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+{% block title %}Traffic Simulation — AI Traffic System{% endblock %}
+
+{% block content %}
+<div class="page-wrapper">
+<div class="container">
+
+  <div class="section-header">
+    <span class="section-label">Python Macroscopic Simulation</span>
+    <h2>⚙️ Traffic Simulation</h2>
+    <p class="text-muted">
+      Run a discrete-time simulation across the 8-node road network.
+      <span class="badge badge-info">⚠️ NOT a SUMO simulation — Python macroscopic model</span>
+    </p>
+  </div>
+
+  <!-- Corridor Transfer Banner from Predictor/Routes -->
+  <div id="simCorridorBanner" class="alert alert-info mb-2" style="display:none; border:1px solid #38bdf8; background:rgba(56, 189, 248, 0.1);">
+    <span style="font-size:1.1rem; margin-right:6px;">🚀</span>
+    <span>Simulating Corridor: <strong id="simCorridorLabel" style="color:#38bdf8;">–</strong></span>
+    <span id="simModeTag" class="badge badge-low ml-2" style="margin-left:8px;"></span>
+  </div>
+
+  <div class="alert alert-info mb-2">
+    ℹ️ <strong>Simulation Model:</strong> Each time step = 1 minute. Vehicles enter at the demand rate,
+    are routed by the selected strategy, and congestion is updated using the BPR function.
+    Results are approximate — individual vehicle movements are not modelled.
+  </div>
+
+  <div class="grid-2" style="gap:1.25rem; align-items:start;">
+
+    <!-- Controls -->
+    <div class="card">
+      <div class="card-title mb-2"><span class="icon">🎛️</span> Simulation Parameters</div>
+
+      <!-- Vehicle Mode Selection -->
+      <div class="form-group mb-2">
+        <label class="form-label text-xs text-muted" style="text-transform:uppercase; letter-spacing:0.5px; font-weight:700;">Vehicle Mission / Mode:</label>
+        <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+          <button type="button" class="tab-btn flex-1" id="simModeAmbulance" onclick="setSimVehicleMode('ambulance')">
+            🚑 Ambulance
+          </button>
+          <button type="button" class="tab-btn flex-1" id="simModeDelivery" onclick="setSimVehicleMode('delivery')">
+            🛵 Delivery
+          </button>
+          <button type="button" class="tab-btn flex-1 active" id="simModeCommute" onclick="setSimVehicleMode('commute')">
+            🚗 Commuter
+          </button>
+        </div>
+        <input type="hidden" id="simVehicleMode" value="commute">
+      </div>
+
+      <div class="grid-2">
+        <div class="form-group">
+          <label class="form-label">Number of Vehicles: <span id="nVehVal">200</span></label>
+          <input type="range" id="simVehicles" min="10" max="500" value="200" step="10"
+            oninput="document.getElementById('nVehVal').textContent=this.value">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Demand Rate (veh/min): <span id="demandVal">10</span></label>
+          <input type="range" id="simDemand" min="1" max="30" value="10"
+            oninput="document.getElementById('demandVal').textContent=this.value">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Duration (minutes): <span id="durVal">30</span></label>
+          <input type="range" id="simDuration" min="5" max="60" value="30" step="5"
+            oninput="document.getElementById('durVal').textContent=this.value">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Start Hour</label>
+          <input type="number" id="simHour" class="form-control" value="8" min="0" max="23">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Weather</label>
+          <select id="simWeather" class="form-control">
+            <option value="0">☀️ Clear</option><option value="1">🌧️ Rain</option>
+            <option value="2">🌫️ Fog</option><option value="3">❄️ Snow</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Accident Edge</label>
+          <select id="simAccident" class="form-control">
+            <option value="">None</option>
+            <option value="A-B">A→B</option>
+            <option value="A-C">A→C</option>
+            <option value="B-F">B→F</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Routing Strategy</label>
+        <div class="tabs">
+          <button class="tab-btn active" onclick="setStrategy('both',this)">Both Strategies</button>
+          <button class="tab-btn" onclick="setStrategy('baseline',this)">Baseline Only</button>
+          <button class="tab-btn" onclick="setStrategy('proposed',this)">Proposed Only</button>
+        </div>
+        <input type="hidden" id="simStrategy" value="both">
+      </div>
+
+      <button class="btn btn-success w-full" onclick="runSimulation()" id="simBtn">
+        ▶ Run Simulation
+      </button>
+
+      <div id="simStatus" style="margin-top:1rem; display:none;">
+        <div class="flex items-center gap-1">
+          <div class="spinner"></div>
+          <span class="text-sm text-muted">Running simulation… (may take a few seconds)</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Results Summary -->
+    <div>
+      <div id="simPlaceholder" class="card" style="text-align:center; padding:3rem 1rem; color:var(--text-muted);">
+        <div style="font-size:3rem; margin-bottom:1rem;">⚙️</div>
+        <div>Configure parameters and click <strong>Run Simulation</strong></div>
+      </div>
+
+      <div id="simResults" style="display:none;">
+        <div class="grid-2 mb-2" id="simStatsGrid"></div>
+
+        <div class="card mb-2">
+          <div class="card-title mb-2"><span class="icon">📊</span> Strategy Comparison</div>
+          <canvas id="simCompareChart" height="180"></canvas>
+        </div>
+
+        <!-- Cross-Module Action Links -->
+        <div class="card mb-2" style="background:rgba(56, 189, 248, 0.08); border:1px solid rgba(56, 189, 248, 0.3); padding:0.85rem; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.75rem;">
+          <span style="font-size:0.85rem; font-weight:700; color:#38bdf8;">🌐 Connected Modules:</span>
+          <div style="display:flex; gap:0.5rem;">
+            <a href="/predict" class="btn btn-primary" style="padding:0.4rem 0.8rem; font-size:0.8rem; font-weight:700; text-decoration:none;">
+              🚦 Return to AI Predictor
+            </a>
+            <a href="/routes" class="btn btn-secondary" style="padding:0.4rem 0.8rem; font-size:0.8rem; font-weight:700; text-decoration:none;">
+              🗺️ Inspect on Live Map
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Time series chart -->
+  <div class="card mt-2" id="timeSeriesCard" style="display:none;">
+    <div class="card-title mb-2"><span class="icon">📈</span> Average Network Congestion Over Time</div>
+    <canvas id="timeSeriesChart" height="120"></canvas>
+    <div class="alert alert-warning mt-2">
+      ⚠️ Congestion increases as more vehicles enter the network.
+      Values above 1.0 indicate over-capacity conditions in the simulation.
+    </div>
+  </div>
+
+</div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/charts.js') }}"></script>
+{% endblock %}

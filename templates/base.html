@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="{% block meta_desc %}AI-based traffic prediction and congestion-aware route recommendation system.{% endblock %}">
+  <title>{% block title %}AI Traffic System{% endblock %}</title>
+
+  <!-- Favicon emoji fallback -->
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🚦</text></svg>">
+
+  <!-- Leaflet CSS (for map pages) -->
+  {% block extra_css %}{% endblock %}
+
+  <!-- Main stylesheet -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+
+<!-- ── Navigation ── -->
+<nav class="navbar">
+  <a href="/" class="nav-brand">
+    <span class="brand-icon">🚦</span>
+    TrafficAI Pro
+  </a>
+
+  <ul class="nav-links">
+    <li><a href="/" {% if request.endpoint=='index' %}class="active"{% endif %}>🏠 Home</a></li>
+    <li><a href="/predict" {% if request.endpoint in ['predict', 'predict_view', 'prediction_page'] %}class="active"{% endif %}>🚦 <strong>Live AI Predictor</strong></a></li>
+    <li><a href="/dashboard" {% if request.endpoint=='dashboard' %}class="active"{% endif %}>📊 Dashboard</a></li>
+    <li><a href="/routes" {% if request.endpoint=='routes_page' %}class="active"{% endif %}>🗺️ Live Map</a></li>
+    <li><a href="/simulation" {% if request.endpoint=='simulation_page' %}class="active"{% endif %}>⚙️ Simulation</a></li>
+    <li><a href="/comparison" {% if request.endpoint=='comparison_page' %}class="active"{% endif %}>📈 Analytics</a></li>
+    <li><a href="/about" {% if request.endpoint=='about' %}class="active"{% endif %}>ℹ️ About</a></li>
+  </ul>
+
+  <div class="nav-status">
+    <span class="status-dot" style="background:#10b981; box-shadow:0 0 10px #10b981;"></span>
+    <span style="font-weight:700; color:#10b981;">AI Routing Online</span>
+  </div>
+</nav>
+
+<!-- ── Page Content ── -->
+{% block content %}{% endblock %}
+
+<!-- ── Footer ── -->
+<footer>
+  <p>
+    🚦 <strong>TrafficAI Pro Enterprise</strong> &nbsp;|&nbsp;
+    Smart Congestion Prediction &amp; Green Bypass Routing for 🚑 Ambulances &amp; 🛵 Quick-Commerce &nbsp;|&nbsp;
+    Powered by Random Forest ML &amp; High-Speed Graph Routing
+  </p>
+</footer>
+
+<!-- Chart.js CDN -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+{% block extra_js %}{% endblock %}
+</body>
+</html>

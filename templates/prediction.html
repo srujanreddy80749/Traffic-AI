@@ -1,0 +1,150 @@
+{% extends "base.html" %}
+{% block title %}Traffic Prediction — AI Traffic System{% endblock %}
+
+{% block content %}
+<div class="page-wrapper">
+<div class="container">
+
+  <div class="section-header">
+    <span class="section-label">Machine Learning</span>
+    <h2>🤖 Traffic Prediction</h2>
+    <p class="text-muted">
+      Random Forest model predicts traffic level and travel time.
+      Trained on 5,000 <strong>synthetic records</strong> — not real-world data.
+    </p>
+  </div>
+
+  <div class="alert alert-warning mb-2">
+    ⚠️ <strong>Synthetic Data Notice:</strong> The ML model is trained on computer-generated data
+    that mimics realistic traffic patterns (rush hours, weather effects, etc.).
+    Predictions are for educational demonstration only — not real traffic forecasts.
+  </div>
+
+  <div class="grid-2" style="gap:1.25rem; align-items:start;">
+
+    <!-- Input Form -->
+    <div>
+      <div class="card mb-2">
+        <div class="card-title mb-2"><span class="icon">⚙️</span> Input Features</div>
+
+        <div class="grid-2">
+          <div class="form-group">
+            <label class="form-label">Hour of Day (0–23)</label>
+            <input type="number" id="predHour" class="form-control" value="8" min="0" max="23">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Day of Week</label>
+            <select id="predDay" class="form-control">
+              <option value="0">Monday</option><option value="1">Tuesday</option>
+              <option value="2">Wednesday</option><option value="3">Thursday</option>
+              <option value="4">Friday</option><option value="5">Saturday</option>
+              <option value="6">Sunday</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Vehicle Count: <span id="vehCountVal">200</span></label>
+            <input type="range" id="predVehicles" min="0" max="600" value="200"
+              oninput="document.getElementById('vehCountVal').textContent=this.value">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Road Capacity: <span id="capVal">400</span></label>
+            <input type="range" id="predCapacity" min="100" max="700" value="400" step="50"
+              oninput="document.getElementById('capVal').textContent=this.value">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Weather</label>
+            <select id="predWeather" class="form-control">
+              <option value="0">☀️ Clear</option><option value="1">🌧️ Rain</option>
+              <option value="2">🌫️ Fog</option><option value="3">❄️ Snow</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Accident / Closure</label>
+            <select id="predAccident" class="form-control">
+              <option value="0">No</option><option value="1">Yes</option>
+            </select>
+          </div>
+        </div>
+
+        <button class="btn btn-primary w-full" onclick="runPrediction()" id="predBtn">
+          🤖 Predict Traffic
+        </button>
+      </div>
+
+      <!-- Model Metrics Card -->
+      <div class="card" id="metricsCard">
+        <div class="card-title mb-2"><span class="icon">📊</span> Model Performance Metrics</div>
+        <div id="metricsContent">
+          <div style="color:var(--text-muted); font-size:0.85rem;">Loading metrics…</div>
+        </div>
+        <div class="alert alert-info mt-2">
+          ℹ️ Metrics measured on 20% held-out test set (1,000 synthetic records).
+          No data leakage — test set was never used during training.
+        </div>
+      </div>
+    </div>
+
+    <!-- Results -->
+    <div>
+      <!-- Main prediction result -->
+      <div class="card mb-2" id="predResultCard" style="display:none;">
+        <div class="card-title mb-2"><span class="icon">🎯</span> Prediction Result</div>
+
+        <div style="text-align:center; padding:1.5rem 0;">
+          <div id="trafficLevelBig" style="font-size:4rem; font-weight:900; margin-bottom:0.5rem;">–</div>
+          <div id="trafficLevelLabel" style="font-size:1rem; color:var(--text-muted);">Traffic Level</div>
+          <div id="confidenceBar" style="margin:1rem auto; max-width:280px;">
+            <div style="font-size:0.75rem; color:var(--text-muted); margin-bottom:0.4rem;">
+              Model Confidence: <span id="confPct"></span>
+            </div>
+            <div style="height:6px; background:rgba(255,255,255,0.1); border-radius:3px;">
+              <div id="confBarFill" style="height:100%; border-radius:3px; background:var(--accent-blue); transition:width 0.6s;"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div style="text-align:center; border:1px solid var(--border); border-radius:var(--radius-sm); padding:1rem;">
+            <div class="text-xs text-muted">Predicted Travel Time</div>
+            <div id="predTime" style="font-size:2rem; font-weight:800; color:var(--accent-cyan);">–</div>
+            <div class="text-xs text-muted">minutes</div>
+          </div>
+          <div style="text-align:center; border:1px solid var(--border); border-radius:var(--radius-sm); padding:1rem;">
+            <div class="text-xs text-muted">Congestion Ratio</div>
+            <div id="predCongestion" style="font-size:2rem; font-weight:800; color:var(--accent-orange);">–</div>
+            <div class="text-xs text-muted">vehicles/capacity</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Horizon forecasts -->
+      <div class="card mb-2" id="horizonCard" style="display:none;">
+        <div class="card-title mb-2"><span class="icon">🔮</span> Future Congestion Forecasts</div>
+        <div class="text-xs text-muted mb-1">
+          Estimated conditions at 15, 30, and 60 minutes ahead (same day, shifting demand model).
+        </div>
+        <div class="grid-3" id="horizonGrid"></div>
+      </div>
+
+      <!-- Prediction chart -->
+      <div class="card" id="horizonChartCard" style="display:none;">
+        <div class="card-title mb-2"><span class="icon">📈</span> Travel Time Over Next 60 Minutes</div>
+        <canvas id="horizonChart" height="180"></canvas>
+      </div>
+
+      <!-- Placeholder -->
+      <div id="predPlaceholder" class="card" style="text-align:center; padding:3rem 1rem; color:var(--text-muted);">
+        <div style="font-size:3rem; margin-bottom:1rem;">🤖</div>
+        <div>Set parameters above and click <strong>Predict Traffic</strong></div>
+        <div class="text-sm mt-1">Results will appear here</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/charts.js') }}"></script>
+{% endblock %}

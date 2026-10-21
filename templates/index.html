@@ -1,0 +1,798 @@
+{% extends "base.html" %}
+{% block title %}AI Traffic Predictor & Alternate Route Recommender{% endblock %}
+{% block meta_desc %}Search any origin and destination across India to predict heavy traffic delays and get AI-recommended alternate bypass routes with time savings.{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+  .search-hero-card {
+    background: linear-gradient(135deg, rgba(15, 23, 42, 0.95), rgba(30, 41, 59, 0.9));
+    border: 1px solid rgba(56, 189, 248, 0.3);
+    border-radius: var(--radius-lg);
+    box-shadow: 0 12px 35px rgba(0, 0, 0, 0.5), 0 0 20px rgba(56, 189, 248, 0.15);
+    padding: 1.75rem;
+    margin-bottom: 2rem;
+  }
+  .corridor-chip-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.75rem;
+    margin-bottom: 1rem;
+  }
+  .quick-chip {
+    padding: 0.35rem 0.8rem;
+    font-size: 0.8rem;
+    font-weight: 500;
+    border-radius: 9999px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .quick-chip:hover {
+    background: rgba(56, 189, 248, 0.18);
+    border-color: #38bdf8;
+    color: #fff;
+    transform: translateY(-1px);
+  }
+  .quick-chip.active {
+    background: rgba(56, 189, 248, 0.28);
+    border-color: #38bdf8;
+    color: #38bdf8;
+    font-weight: 700;
+  }
+  .autocomplete-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    z-index: 1050;
+    background: #0f172a;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    max-height: 200px;
+    overflow-y: auto;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.6);
+    display: none;
+  }
+  .autocomplete-row {
+    padding: 0.6rem 0.85rem;
+    font-size: 0.82rem;
+    cursor: pointer;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    transition: background 0.15s ease;
+  }
+  .autocomplete-row:hover {
+    background: rgba(56, 189, 248, 0.15);
+    color: #38bdf8;
+  }
+  .traffic-pill {
+    padding: 0.3rem 0.7rem;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+  .pill-danger { background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); }
+  .pill-success { background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
+  .pill-warning { background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-wrapper">
+<div class="container">
+
+  <!-- ── Main Search & Prediction Header ── -->
+  <div class="search-hero-card">
+    <div class="flex items-center gap-1 mb-1">
+      <span style="font-size:1.8rem;">🚦</span>
+      <div>
+        <h1 style="font-size:1.75rem; margin:0; line-height:1.2;">
+          AI Traffic Predictor &amp; Alternate Route Finder
+        </h1>
+        <p class="text-muted text-sm" style="margin-top:0.25rem;">
+          Enter your starting point and destination to predict heavy traffic travel times, detect congestion bottlenecks, and get an AI-recommended alternate route.
+        </p>
+      </div>
+    </div>
+
+    <!-- Quick Indian Corridor Chips -->
+    <div style="margin-top:1.25rem;">
+      <span class="text-xs text-muted" style="text-transform:uppercase; letter-spacing:0.06em; font-weight:700;">
+        ⚡ 1-Click Popular Indian Routes:
+      </span>
+      <div class="corridor-chip-group" id="homeCorridorChips">
+        <!-- Loaded via JavaScript -->
+      </div>
+    </div>
+
+    <!-- Search Inputs Form -->
+    <div class="grid-2" style="gap:1rem; margin-top:0.5rem;">
+      <!-- Origin -->
+      <div class="form-group" style="position:relative; margin-bottom:0;">
+        <label class="form-label flex justify-between">
+          <span>📍 Starting Point (Origin)</span>
+          <span class="text-xs text-muted" id="homeOriginCoordsText">Coords: 12.9176, 77.6238</span>
+        </label>
+        <div style="display:flex; gap:0.5rem;">
+          <input type="text" id="homeOriginInput" class="form-control" 
+                 placeholder="e.g. Central Silk Board, Bengaluru" 
+                 value="Central Silk Board, Bengaluru" autocomplete="off">
+          <button class="btn btn-secondary" onclick="searchHomeLoc('origin')" style="padding:0 0.9rem;" title="Search">
+            🔍
+          </button>
+        </div>
+        <div id="homeOriginDropdown" class="autocomplete-dropdown"></div>
+      </div>
+
+      <!-- Destination -->
+      <div class="form-group" style="position:relative; margin-bottom:0;">
+        <label class="form-label flex justify-between">
+          <span>🏁 Destination</span>
+          <span class="text-xs text-muted" id="homeDestCoordsText">Coords: 12.9855, 77.7317</span>
+        </label>
+        <div style="display:flex; gap:0.5rem;">
+          <input type="text" id="homeDestInput" class="form-control" 
+                 placeholder="e.g. ITPL Main Road, Whitefield, Bengaluru" 
+                 value="ITPL Main Road, Whitefield, Bengaluru" autocomplete="off">
+          <button class="btn btn-secondary" onclick="searchHomeLoc('dest')" style="padding:0 0.9rem;" title="Search">
+            🔍
+          </button>
+        </div>
+        <div id="homeDestDropdown" class="autocomplete-dropdown"></div>
+      </div>
+    </div>
+
+    <!-- Condition Filters -->
+    <div class="grid-4" style="gap:0.75rem; margin-top:1rem;">
+      <div class="form-group" style="margin-bottom:0;">
+        <label class="form-label text-xs">Traffic Timing</label>
+        <select id="homeTrafficHour" class="form-control" style="font-size:0.85rem;">
+          <option value="9" selected>🚨 Morning Peak Rush (09:00 AM)</option>
+          <option value="18">🚨 Evening Peak Rush (06:00 PM)</option>
+          <option value="8">🚗 Morning Commute (08:00 AM)</option>
+          <option value="13">🚙 Afternoon Flow (01:00 PM)</option>
+          <option value="20">🚗 Night Commute (08:00 PM)</option>
+          <option value="23">🟢 Late Night Free Flow (11:00 PM)</option>
+        </select>
+      </div>
+
+      <div class="form-group" style="margin-bottom:0;">
+        <label class="form-label text-xs">Day of Week</label>
+        <select id="homeDayOfWeek" class="form-control" style="font-size:0.85rem;">
+          <option value="0" selected>Monday (High Traffic)</option>
+          <option value="1">Tuesday</option>
+          <option value="2">Wednesday</option>
+          <option value="3">Thursday</option>
+          <option value="4">Friday (Weekend Rush)</option>
+          <option value="5">Saturday</option>
+          <option value="6">Sunday (Light Traffic)</option>
+        </select>
+      </div>
+
+      <div class="form-group" style="margin-bottom:0;">
+        <label class="form-label text-xs">Weather</label>
+        <select id="homeWeather" class="form-control" style="font-size:0.85rem;">
+          <option value="0" selected>☀️ Clear / Normal</option>
+          <option value="1">🌧️ Heavy Monsoon Rain (+35% delay)</option>
+          <option value="2">🌫️ Winter Fog / Low Visibility</option>
+        </select>
+      </div>
+
+      <div class="form-group" style="margin-bottom:0;">
+        <label class="form-label text-xs">Simulated Incident</label>
+        <select id="homeIncident" class="form-control" style="font-size:0.85rem;">
+          <option value="None" selected>None (Normal Rush)</option>
+          <option value="Flyover Construction">🚧 Flyover Construction</option>
+          <option value="Waterlogging">🌊 Waterlogged Underpass</option>
+          <option value="Vehicle Breakdown">🚌 Bus / Truck Breakdown</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Predict Action Button -->
+    <div style="margin-top:1.25rem;">
+      <button class="btn btn-primary w-full" id="homePredictBtn" onclick="runHomeTrafficPrediction()"
+              style="padding:0.9rem; font-size:1.05rem; font-weight:700; letter-spacing:0.02em;">
+        🚦 Predict Traffic &amp; Find Alternate Route
+      </button>
+    </div>
+  </div>
+
+  <!-- ── Results Section ── -->
+  <div id="homePredictionResults" style="display:none; margin-bottom:2.5rem;">
+    
+    <!-- AI Explanation Callout Banner -->
+    <div id="homeAiCallout" class="card mb-2" style="border-left: 5px solid var(--accent-green); background: rgba(16, 185, 129, 0.08); padding:1.25rem;">
+      <div style="display:flex; align-items:center; gap:0.5rem; font-weight:700; color:var(--accent-green); font-size:1.05rem; margin-bottom:0.4rem;">
+        <span>🧠 AI Traffic Prediction &amp; Recommendation</span>
+      </div>
+      <div id="homeAiReasoningText" style="color:var(--text-primary); font-size:0.95rem; line-height:1.6;"></div>
+    </div>
+
+    <!-- Side-by-Side Route Comparison Cards -->
+    <div class="grid-2 mb-2" style="gap:1.25rem; align-items:stretch;">
+      
+      <!-- Primary Heavy Traffic Route -->
+      <div class="card route-card best-baseline" style="display:flex; flex-direction:column; justify-content:space-between;">
+        <div>
+          <div class="flex justify-between items-center mb-1">
+            <div class="card-title" style="color:var(--accent-orange); font-size:1.15rem;">
+              🛑 Heavy Traffic Route (Direct)
+            </div>
+            <span class="traffic-pill pill-danger" id="homeBlBadge">Severe Congestion</span>
+          </div>
+          <p class="text-muted text-xs mb-2">Direct central arterial carrying peak commuter traffic</p>
+
+          <div style="margin:1rem 0;">
+            <div class="text-xs text-muted">Estimated Travel Time in Heavy Traffic</div>
+            <div id="homeBlTime" style="font-size:2.2rem; font-weight:800; color:var(--accent-orange); line-height:1.1;">
+              –
+            </div>
+            <div id="homeBlDelayText" class="text-xs text-muted" style="margin-top:0.25rem; color:#f87171;">
+              Includes +30 mins congestion delay
+            </div>
+          </div>
+        </div>
+
+        <div class="grid-3" style="gap:0.75rem; border-top:1px solid rgba(255,255,255,0.08); padding-top:0.75rem;">
+          <div>
+            <div class="text-xs text-muted">Distance</div>
+            <div id="homeBlDist" style="font-weight:700; font-size:1.05rem;">–</div>
+          </div>
+          <div>
+            <div class="text-xs text-muted">Average Speed</div>
+            <div id="homeBlSpeed" style="font-weight:700; font-size:1.05rem; color:#fbbf24;">–</div>
+          </div>
+          <div>
+            <div class="text-xs text-muted">Queued Vehicles</div>
+            <div id="homeBlVehicles" style="font-weight:800; font-size:1.05rem; color:#f87171;">–</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- AI Suggested Alternate Route -->
+      <div class="card route-card best-proposed" style="display:flex; flex-direction:column; justify-content:space-between;">
+        <div>
+          <div class="flex justify-between items-center mb-1">
+            <div class="card-title" style="color:var(--accent-green); font-size:1.15rem;">
+              ⚡ AI Suggested Alternate Route
+            </div>
+            <span class="traffic-pill pill-success" id="homeAltBadge">AI Recommended</span>
+          </div>
+          <p class="text-muted text-xs mb-2">Congestion-aware bypass avoiding the central bottlenecks</p>
+
+          <div style="margin:1rem 0;">
+            <div class="text-xs text-muted">Travel Time via Alternate Route</div>
+            <div id="homeAltTime" style="font-size:2.2rem; font-weight:800; color:var(--accent-green); line-height:1.1;">
+              –
+            </div>
+            <div id="homeTimeSavedCallout" style="font-size:0.95rem; font-weight:800; color:var(--accent-green); margin-top:0.25rem;">
+              ⚡ Saves ~25.1 mins faster!
+            </div>
+          </div>
+        </div>
+
+        <div class="grid-3" style="gap:0.75rem; border-top:1px solid rgba(255,255,255,0.08); padding-top:0.75rem;">
+          <div>
+            <div class="text-xs text-muted">Distance</div>
+            <div id="homeAltDist" style="font-weight:700; font-size:1.05rem;">–</div>
+          </div>
+          <div>
+            <div class="text-xs text-muted">Average Speed</div>
+            <div id="homeAltSpeed" style="font-weight:700; font-size:1.05rem; color:#34d399;">–</div>
+          </div>
+          <div>
+            <div class="text-xs text-muted">Vehicle Load</div>
+            <div id="homeAltVehicles" style="font-weight:800; font-size:1.05rem; color:#34d399;">–</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- 🕒 When is Traffic Heavy vs Low Advisor -->
+    <div class="card mb-2" style="background:rgba(15, 23, 42, 0.85); border:1px solid rgba(56, 189, 248, 0.25); padding:1.25rem;">
+      <div style="font-size:1.05rem; font-weight:700; color:#38bdf8; margin-bottom:0.75rem; display:flex; align-items:center; gap:0.5rem;">
+        <span>🕒</span> <strong>Time-of-Day Traffic Analysis (When Heavy vs When Low):</strong>
+      </div>
+
+      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:1rem; margin-bottom:0.75rem;">
+        <div style="background:rgba(239, 68, 68, 0.08); border:1px solid rgba(239, 68, 68, 0.3); border-radius:8px; padding:10px 14px;">
+          <div style="font-size:0.78rem; text-transform:uppercase; font-weight:700; color:#f87171;">🔴 When is Traffic Heavy:</div>
+          <div id="homeHeavyHours" style="font-weight:700; font-size:0.95rem; color:#fca5a5; margin-top:2px;">
+            08:00 AM – 11:30 AM &amp; 05:30 PM – 09:00 PM
+          </div>
+          <div style="font-size:0.78rem; color:#94a3b8; margin-top:3px;">
+            Travel Time: <strong id="homeWorstTimeText" style="color:#f87171;">~52.5 mins</strong> (Peak Gridlock)
+          </div>
+        </div>
+
+        <div style="background:rgba(16, 185, 129, 0.08); border:1px solid rgba(16, 185, 129, 0.3); border-radius:8px; padding:10px 14px;">
+          <div style="font-size:0.78rem; text-transform:uppercase; font-weight:700; color:#34d399;">🟢 When is Traffic Low:</div>
+          <div id="homeLowHours" style="font-weight:700; font-size:0.95rem; color:#86efac; margin-top:2px;">
+            12:30 PM – 03:30 PM &amp; 09:30 PM – 06:00 AM
+          </div>
+          <div style="font-size:0.78rem; color:#94a3b8; margin-top:3px;">
+            Travel Time: <strong id="homeBestTimeText" style="color:#34d399;">~22.1 mins</strong> (⚡ Saves ~30 mins!)
+          </div>
+        </div>
+      </div>
+
+      <!-- 24-Hour Visual Hourly Traffic Bar -->
+      <div style="border-top:1px solid rgba(255,255,255,0.08); padding-top:10px; margin-top:8px;">
+        <div style="display:flex; justify-content:space-between; font-size:0.78rem; color:var(--text-muted); margin-bottom:6px;">
+          <span>24-Hour Departure Forecast (00:00 to 23:00)</span>
+          <span>Click any bar to see instant travel time</span>
+        </div>
+        <div id="homeHourlyBars" style="display:grid; grid-template-columns:repeat(24, 1fr); gap:3px; height:28px; align-items:end; background:rgba(0,0,0,0.25); padding:3px; border-radius:6px;">
+          <!-- 24 bars -->
+        </div>
+        <div style="display:flex; justify-content:space-between; font-size:0.7rem; color:#64748b; margin-top:4px;">
+          <span>12 AM (Low)</span>
+          <span>09 AM (Peak)</span>
+          <span>02 PM (Low)</span>
+          <span>06 PM (Peak)</span>
+          <span>11 PM (Low)</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Interactive Route Map -->
+    <div class="card" style="padding:0.75rem; position:relative; margin-bottom:1.5rem;">
+      <div class="loading-overlay" id="homeMapLoader">
+        <div class="spinner"></div><span>Calculating routes, predicting congestion &amp; vehicle density…</span>
+      </div>
+      <div id="homeMap" style="height:480px; border-radius:var(--radius-sm); z-index:1;"></div>
+      
+      <!-- Map Legend -->
+      <div style="display:flex; gap:1.25rem; padding:0.75rem 0.5rem 0; flex-wrap:wrap; font-size:0.82rem; align-items:center;">
+        <span style="color:var(--text-muted); font-weight:600;">Legend:</span>
+        <span><span style="color:#ef4444; font-weight:bold;">━━</span> Heavy Traffic Direct Route</span>
+        <span><span style="color:#10b981; font-weight:bold;">━━</span> AI Suggested Alternate Route</span>
+        <span class="traffic-pill pill-danger">🔴 Bottleneck (>85% Cap)</span>
+        <span class="traffic-pill pill-warning">🟡 Moderate Traffic</span>
+        <span class="traffic-pill pill-success">🟢 Smooth Flow</span>
+        <span class="text-muted" style="margin-left:auto; font-size:0.78rem;">💡 Click anywhere on map to change Origin / Destination</span>
+      </div>
+    </div>
+
+    <!-- Bottleneck Breakdown Table -->
+    <div class="card">
+      <div class="card-title mb-2"><span class="icon">📊</span> Stretch-by-Stretch Vehicle Load &amp; Congestion Breakdown</div>
+      <div class="table-wrapper">
+        <table id="homeSegmentsTable">
+          <thead>
+            <tr>
+              <th>Route Option</th>
+              <th>Road Stretch</th>
+              <th>Vehicles on Stretch</th>
+              <th>Estimated Speed</th>
+              <th>Congestion Status</th>
+            </tr>
+          </thead>
+          <tbody id="homeSegmentsBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── Additional Capabilities & Links ── -->
+  <div style="margin-top:3rem; padding-top:2rem; border-top:1px solid rgba(255,255,255,0.08);">
+    <div class="section-header" style="text-align:center;">
+      <span class="section-label">Experimental AI Platform</span>
+      <h2>Full System Capabilities</h2>
+      <p>Explore deep-dive machine learning predictions, road network simulations, and performance benchmarks.</p>
+    </div>
+
+    <div class="grid-3" style="gap:1.25rem;">
+      <div class="card animate-in" style="text-align:center;">
+        <div style="font-size:2.2rem; margin-bottom:0.75rem;">🤖</div>
+        <h3 style="margin-bottom:0.4rem; font-size:1.15rem;">ML Model Prediction</h3>
+        <p class="text-muted text-sm">
+          Test custom feature inputs (vehicle count, weather, incidents) directly against the trained Random Forest classifier and regressor.
+        </p>
+        <div style="margin-top:1rem;">
+          <a href="/prediction" class="btn btn-outline" style="font-size:0.82rem;">Test ML Model →</a>
+        </div>
+      </div>
+
+      <div class="card animate-in" style="text-align:center;">
+        <div style="font-size:2.2rem; margin-bottom:0.75rem;">⚙️</div>
+        <h3 style="margin-bottom:0.4rem; font-size:1.15rem;">Traffic Simulation Lab</h3>
+        <p class="text-muted text-sm">
+          Run discrete-time macroscopic traffic simulations with dynamic vehicle inflow, BPR congestion curves, and real-time queue graphs.
+        </p>
+        <div style="margin-top:1rem;">
+          <a href="/simulation" class="btn btn-outline" style="font-size:0.82rem;">Run Simulator →</a>
+        </div>
+      </div>
+
+      <div class="card animate-in" style="text-align:center;">
+        <div style="font-size:2.2rem; margin-bottom:0.75rem;">📈</div>
+        <h3 style="margin-bottom:0.4rem; font-size:1.15rem;">Performance Benchmarks</h3>
+        <p class="text-muted text-sm">
+          Benchmark Baseline Dijkstra vs Congestion-Aware routing across 5 stress-test scenarios to verify average delay reduction.
+        </p>
+        <div style="margin-top:1rem;">
+          <a href="/comparison" class="btn btn-outline" style="font-size:0.82rem;">View Benchmarks →</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+// ── Homepage Interactive Traffic Navigator Script ───────────────────────────
+
+let homeMap = null;
+let homeMapLayers = [];
+let homeOriginCoords = [12.9176, 77.6238]; // Default: Central Silk Board
+let homeDestCoords   = [12.9855, 77.7317]; // Default: Whitefield ITPL
+let homeClickToggle  = 0;
+
+function initHomeMap() {
+  if (homeMap) return;
+  homeMap = L.map('homeMap', {
+    center: [12.95, 77.68],
+    zoom: 12
+  });
+
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap contributors | OSRM Driving Engine',
+    maxZoom: 18
+  }).addTo(homeMap);
+
+  // Click on map to set start/end
+  homeMap.on('click', function(e) {
+    const lat = parseFloat(e.latlng.lat.toFixed(5));
+    const lon = parseFloat(e.latlng.lng.toFixed(5));
+
+    if (homeClickToggle % 2 === 0) {
+      homeOriginCoords = [lat, lon];
+      document.getElementById('homeOriginInput').value = `Selected Point (${lat}, ${lon})`;
+      document.getElementById('homeOriginCoordsText').textContent = `Coords: ${lat}, ${lon}`;
+    } else {
+      homeDestCoords = [lat, lon];
+      document.getElementById('homeDestInput').value = `Selected Point (${lat}, ${lon})`;
+      document.getElementById('homeDestCoordsText').textContent = `Coords: ${lat}, ${lon}`;
+      runHomeTrafficPrediction();
+    }
+    homeClickToggle++;
+  });
+}
+
+// Load corridor chips
+async function loadHomeCorridors() {
+  try {
+    const res = await fetch('/api/india-corridors');
+    const data = await res.json();
+    const container = document.getElementById('homeCorridorChips');
+    if (!container) return;
+
+    container.innerHTML = data.corridors.map((c, i) => `
+      <div class="quick-chip ${i === 0 ? 'active' : ''}" 
+           onclick="selectHomeCorridor('${c.id}')" id="homeChip_${c.id}">
+        <strong>${c.city}:</strong> ${c.title}
+      </div>
+    `).join('');
+
+    window._HOME_CORRIDORS = data.corridors;
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+function selectHomeCorridor(corridorId) {
+  if (!window._HOME_CORRIDORS) return;
+  const c = window._HOME_CORRIDORS.find(item => item.id === corridorId);
+  if (!c) return;
+
+  document.querySelectorAll('.quick-chip').forEach(el => el.classList.remove('active'));
+  const activeChip = document.getElementById('homeChip_' + corridorId);
+  if (activeChip) activeChip.classList.add('active');
+
+  document.getElementById('homeOriginInput').value = c.origin_name;
+  document.getElementById('homeDestInput').value   = c.dest_name;
+  homeOriginCoords = c.origin_coords;
+  homeDestCoords   = c.dest_coords;
+
+  document.getElementById('homeOriginCoordsText').textContent = `Coords: ${c.origin_coords.join(', ')}`;
+  document.getElementById('homeDestCoordsText').textContent   = `Coords: ${c.dest_coords.join(', ')}`;
+
+  runHomeTrafficPrediction();
+}
+
+// Autocomplete Location Search
+async function searchHomeLoc(field) {
+  const inputId = field === 'origin' ? 'homeOriginInput' : 'homeDestInput';
+  const dropId  = field === 'origin' ? 'homeOriginDropdown' : 'homeDestDropdown';
+  const query   = document.getElementById(inputId).value.trim();
+  const drop    = document.getElementById(dropId);
+
+  if (!query) return;
+
+  drop.innerHTML = '<div class="autocomplete-row text-muted">Searching locations…</div>';
+  drop.style.display = 'block';
+
+  try {
+    const res = await fetch(`/api/india-geocode?q=${encodeURIComponent(query)}`);
+    const data = await res.json();
+
+    if (!data.results || data.results.length === 0) {
+      drop.innerHTML = '<div class="autocomplete-row text-muted">No location matches found.</div>';
+      return;
+    }
+
+    drop.innerHTML = data.results.map(r => `
+      <div class="autocomplete-row" onclick="pickHomeLoc('${field}', '${r.display_name.replace(/'/g, "\\'")}', ${r.lat}, ${r.lon})">
+        📍 <strong>${r.display_name.split(',')[0]}</strong>
+        <div class="text-xs text-muted" style="margin-top:2px;">${r.display_name}</div>
+      </div>
+    `).join('');
+  } catch (e) {
+    drop.innerHTML = `<div class="autocomplete-row text-muted">Error: ${e.message}</div>`;
+  }
+}
+
+function pickHomeLoc(field, name, lat, lon) {
+  const inputId = field === 'origin' ? 'homeOriginInput' : 'homeDestInput';
+  const dropId  = field === 'origin' ? 'homeOriginDropdown' : 'homeDestDropdown';
+  const textId  = field === 'origin' ? 'homeOriginCoordsText' : 'homeDestCoordsText';
+
+  document.getElementById(inputId).value = name;
+  document.getElementById(textId).textContent = `Coords: ${lat.toFixed(4)}, ${lon.toFixed(4)}`;
+  document.getElementById(dropId).style.display = 'none';
+
+  if (field === 'origin') homeOriginCoords = [lat, lon];
+  else homeDestCoords = [lat, lon];
+
+  if (homeMap) homeMap.setView([lat, lon], 13);
+}
+
+document.addEventListener('click', function(e) {
+  if (!e.target.closest('#homeOriginDropdown') && !e.target.closest('#homeOriginInput')) {
+    const d = document.getElementById('homeOriginDropdown');
+    if (d) d.style.display = 'none';
+  }
+  if (!e.target.closest('#homeDestDropdown') && !e.target.closest('#homeDestInput')) {
+    const d = document.getElementById('homeDestDropdown');
+    if (d) d.style.display = 'none';
+  }
+});
+
+// Run Traffic Prediction & Alternative Route Search
+async function runHomeTrafficPrediction() {
+  const originName = document.getElementById('homeOriginInput').value.trim() || 'Origin';
+  const destName   = document.getElementById('homeDestInput').value.trim() || 'Destination';
+  const hour       = parseInt(document.getElementById('homeTrafficHour').value);
+  const dow        = parseInt(document.getElementById('homeDayOfWeek').value);
+  const weather    = parseInt(document.getElementById('homeWeather').value);
+  const incident   = document.getElementById('homeIncident').value;
+
+  const btn = document.getElementById('homePredictBtn');
+  btn.disabled = true;
+  btn.textContent = '⏳ Predicting Traffic & Calculating Alternate Route…';
+
+  document.getElementById('homePredictionResults').style.display = 'block';
+  setTimeout(() => {
+    initHomeMap();
+    if (homeMap) homeMap.invalidateSize();
+  }, 50);
+
+  document.getElementById('homeMapLoader').classList.add('active');
+
+  try {
+    const res = await fetch('/api/india-route', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        origin_name: originName,
+        dest_name: destName,
+        origin_coords: homeOriginCoords,
+        dest_coords: homeDestCoords,
+        hour: hour,
+        day_of_week: dow,
+        weather: weather,
+        accident_corridor: incident,
+        n_vehicles_rerouting: 150
+      })
+    });
+
+    const data = await res.json();
+    if (data.error) {
+      alert('Error: ' + data.error);
+      return;
+    }
+
+    renderHomeTrafficMap(data);
+    renderHomePredictionCards(data);
+  } catch (err) {
+    alert('Prediction error: ' + err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🚦 Predict Traffic & Find Alternate Route';
+    document.getElementById('homeMapLoader').classList.remove('active');
+  }
+}
+
+function renderHomeTrafficMap(data) {
+  initHomeMap();
+  homeMapLayers.forEach(l => homeMap.removeLayer(l));
+  homeMapLayers = [];
+
+  const bl  = data.baseline_route;
+  const alt = data.alternate_route;
+
+  // 1. Draw Alternate Route (Green Glow)
+  if (alt && alt.geometry && alt.geometry.coordinates) {
+    const altCoords = alt.geometry.coordinates.map(pt => [pt[1], pt[0]]);
+    const glow = L.polyline(altCoords, { color: '#10b981', weight: 8, opacity: 0.35 }).addTo(homeMap);
+    const line = L.polyline(altCoords, { color: '#10b981', weight: 5, opacity: 0.95 }).addTo(homeMap);
+    line.bindPopup(`
+      <strong>⚡ AI Suggested Alternate Route</strong><br>
+      Travel Time: <strong>${alt.current_travel_time_min} mins</strong><br>
+      Distance: <strong>${alt.distance_km} km</strong> (${alt.average_speed_kmh} km/h)<br>
+      <span style="color:#10b981; font-weight:bold;">Saves ~${alt.time_saved_min} mins!</span>
+    `);
+    homeMapLayers.push(glow, line);
+  }
+
+  // 2. Draw Heavy Traffic Primary Route
+  if (bl && bl.segments) {
+    bl.segments.forEach(seg => {
+      const segLine = L.polyline(seg.coords, {
+        color: seg.color, weight: 6, opacity: 0.9,
+        dashArray: seg.color === '#ef4444' ? '6 4' : null
+      }).addTo(homeMap);
+      segLine.bindPopup(`
+        <strong style="color:${seg.color};">Stretch #${seg.segment_id}: ${seg.status}</strong><br>
+        Queued Vehicles: <strong>${seg.vehicles_on_segment.toLocaleString()}</strong><br>
+        Speed: <strong>${seg.speed_kmh} km/h</strong>
+      `);
+      homeMapLayers.push(segLine);
+    });
+  }
+
+  // 3. Markers
+  const origM = L.circleMarker([data.origin.lat, data.origin.lon], {
+    radius: 9, fillColor: '#38bdf8', color: '#fff', weight: 2.5, fillOpacity: 1
+  }).addTo(homeMap);
+  origM.bindTooltip(`📍 <strong>Start</strong>: ${data.origin.name}`, { permanent: true, direction: 'top' });
+  homeMapLayers.push(origM);
+
+  const destM = L.circleMarker([data.destination.lat, data.destination.lon], {
+    radius: 9, fillColor: '#ef4444', color: '#fff', weight: 2.5, fillOpacity: 1
+  }).addTo(homeMap);
+  destM.bindTooltip(`🏁 <strong>Destination</strong>: ${data.destination.name}`, { permanent: true, direction: 'bottom' });
+  homeMapLayers.push(destM);
+
+  // 4. Bottleneck warning pin
+  if (data.bottleneck && bl.geometry && bl.geometry.coordinates) {
+    const pts = bl.geometry.coordinates;
+    const midPt = pts[Math.floor(pts.length / 2)];
+    if (midPt) {
+      const bMarker = L.marker([midPt[1], midPt[0]], {
+        icon: L.divIcon({
+          className: 'bottleneck-pulse-icon',
+          html: `<div style="background:#ef4444; color:#fff; border-radius:50%; width:30px; height:30px; display:flex; align-items:center; justify-content:center; font-weight:bold; box-shadow:0 0 16px #ef4444; border:2px solid #fff; font-size:15px;">⚠️</div>`,
+          iconSize: [30, 30]
+        })
+      }).addTo(homeMap);
+      bMarker.bindPopup(`
+        <strong>⚠️ Severe Traffic Bottleneck</strong><br>
+        ${data.bottleneck.location}<br>
+        Queued: <strong>${data.bottleneck.current_vehicles.toLocaleString()} vehicles</strong><br>
+        Speed: <strong>${data.bottleneck.speed_kmh} km/h</strong>
+      `);
+      homeMapLayers.push(bMarker);
+    }
+  }
+
+  // Fit bounds
+  const pts = [];
+  if (bl && bl.geometry) bl.geometry.coordinates.forEach(c => pts.push([c[1], c[0]]));
+  if (alt && alt.geometry) alt.geometry.coordinates.forEach(c => pts.push([c[1], c[0]]));
+  if (pts.length > 0) homeMap.fitBounds(L.latLngBounds(pts), { padding: [40, 40] });
+}
+
+function renderHomePredictionCards(data) {
+  const bl  = data.baseline_route;
+  const alt = data.alternate_route;
+
+  // AI Reasoning
+  document.getElementById('homeAiReasoningText').textContent = data.ai_explanation;
+
+  // Heavy Traffic Baseline Card
+  document.getElementById('homeBlTime').textContent = `${bl.current_travel_time_min} mins`;
+  const delay = Math.max(0, Math.round(bl.current_travel_time_min - bl.freeflow_time_min));
+  document.getElementById('homeBlDelayText').textContent = `Includes +${delay} mins heavy traffic delay`;
+  document.getElementById('homeBlDist').textContent = `${bl.distance_km} km`;
+  document.getElementById('homeBlSpeed').textContent = `${bl.average_speed_kmh} km/h`;
+  document.getElementById('homeBlVehicles').textContent = `${bl.vehicle_count.toLocaleString()}`;
+
+  // Alternate Card
+  document.getElementById('homeAltTime').textContent = `${alt.current_travel_time_min} mins`;
+  document.getElementById('homeTimeSavedCallout').textContent = alt.time_saved_min > 0 
+    ? `⚡ Saves ~${alt.time_saved_min} mins faster!` 
+    : `Primary route is already optimal`;
+  document.getElementById('homeAltDist').textContent = `${alt.distance_km} km`;
+  document.getElementById('homeAltSpeed').textContent = `${alt.average_speed_kmh} km/h`;
+  document.getElementById('homeAltVehicles').textContent = `${alt.vehicle_count.toLocaleString()}`;
+
+  // Timing Analysis (When Heavy vs Low)
+  const timing = data.timing_analysis;
+  if (timing) {
+    document.getElementById('homeHeavyHours').textContent = timing.heavy_traffic_window;
+    document.getElementById('homeLowHours').textContent   = timing.low_traffic_window;
+    document.getElementById('homeWorstTimeText').textContent = `~${timing.worst_heavy_traffic_time_min} mins`;
+    document.getElementById('homeBestTimeText').textContent  = `~${timing.best_low_traffic_time_min} mins (⚡ Saves ~${timing.low_traffic_savings_min} mins!)`;
+
+    if (timing.timeline) {
+      const barsContainer = document.getElementById('homeHourlyBars');
+      const selectedHour = data.traffic_context ? data.traffic_context.hour : 9;
+      barsContainer.innerHTML = timing.timeline.map(item => {
+        const bg = item.is_heavy ? '#ef4444' : (item.is_low ? '#10b981' : '#f59e0b');
+        const isCurrent = (item.hour === selectedHour);
+        return `
+          <div style="height:100%; background:${bg}; border-radius:3px; cursor:pointer; ${isCurrent ? 'outline:2px solid #fff; transform:scaleY(1.2);' : ''}"
+               title="${item.hour_label}: ${item.travel_time_min} mins (${item.congestion_level} Traffic)"
+               onclick="document.getElementById('homeTrafficHour').value='${item.hour}'; runHomeTrafficPrediction();">
+          </div>
+        `;
+      }).join('');
+    }
+  }
+
+  // Table
+  const tbody = document.getElementById('homeSegmentsBody');
+  const rows = [];
+  if (bl.segments) {
+    bl.segments.forEach(seg => {
+      rows.push(`
+        <tr>
+          <td><span style="color:#ef4444; font-weight:700;">Direct Corridor (Heavy Traffic)</span></td>
+          <td>Stretch #${seg.segment_id}</td>
+          <td><strong style="color:#f87171;">${seg.vehicles_on_segment.toLocaleString()}</strong></td>
+          <td>${seg.speed_kmh} km/h</td>
+          <td><span class="traffic-pill ${seg.color === '#ef4444' ? 'pill-danger' : (seg.color === '#f59e0b' ? 'pill-warning' : 'pill-success')}">${seg.status}</span></td>
+        </tr>
+      `);
+    });
+  }
+  if (alt.segments) {
+    alt.segments.forEach(seg => {
+      rows.push(`
+        <tr style="background:rgba(16,185,129,0.03);">
+          <td><span style="color:#10b981; font-weight:700;">AI Alternate Corridor (Bypass)</span></td>
+          <td>Stretch #${seg.segment_id}</td>
+          <td><strong style="color:#34d399;">${seg.vehicles_on_segment.toLocaleString()}</strong></td>
+          <td>${seg.speed_kmh} km/h</td>
+          <td><span class="traffic-pill pill-success">${seg.status}</span></td>
+        </tr>
+      `);
+    });
+  }
+  tbody.innerHTML = rows.join('');
+}
+
+// Auto-run on load
+document.addEventListener('DOMContentLoaded', function() {
+  loadHomeCorridors();
+  setTimeout(() => {
+    runHomeTrafficPrediction();
+  }, 400);
+});
+</script>
+{% endblock %}
